@@ -20,7 +20,7 @@
 #include <linux/can/raw.h>
 #include "cia-613-3.h"
 
-#define DEFAULT_PRIO_ID 0x242
+#define DEFAULT_TRANSFER_ID 0x242
 
 extern int optind, opterr, optopt;
 
@@ -29,18 +29,18 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 sender\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <src_if> <dst_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -s <segsize>   (segment size "
+	fprintf(stderr, "         -s <segsize>     (segment size "
 		"- default: %d bytes)\n", DEFAULT_SEG_SIZE);
-	fprintf(stderr, "         -p <prio_id>   (PRIO ID "
-		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
-	fprintf(stderr, "         -v             (verbose)\n");
+	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
+		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
+	fprintf(stderr, "         -v               (verbose)\n");
 }
 
 int main(int argc, char **argv)
 {
 	int opt;
 	unsigned int segsz = DEFAULT_SEG_SIZE;
-	canid_t prio = DEFAULT_PRIO_ID;
+	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
 
 	int src, dst;
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "s:p:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "s:t:vh?")) != -1) {
 		switch (opt) {
 
 		case 's':
@@ -62,9 +62,9 @@ int main(int argc, char **argv)
 			}
 			break;
 
-		case 'p':
-			prio = strtoul(optarg, NULL, 16);
-			if (prio & ~CANXL_PRIO_MASK) {
+		case 't':
+			transfer_id = strtoul(optarg, NULL, 16);
+			if (transfer_id & ~CANXL_PRIO_MASK) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	rfilter.can_id = prio;
+	rfilter.can_id = transfer_id;
 	rfilter.can_mask = CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_SFF_MASK;
 	ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
 	if (ret < 0) {
