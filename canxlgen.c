@@ -133,6 +133,9 @@ int main(int argc, char **argv)
 	cfx.sdt = 0;
 	cfx.af = 0xAFAFAFAF;
 	memset(cfx.data, 0xCC, CANXL_MAX_DLEN);
+	cfx.data[0] = 0xAB;
+	cfx.data[1] = 0xCD;
+	cfx.data[2] = 0xEF;
 
 	for (dlen = from; dlen <= to; dlen++) {
 		cfx.len = dlen;
@@ -145,8 +148,11 @@ int main(int argc, char **argv)
 		}
 
 		if (verbose)
-			printf("%03X###%02X%02X%08X(%d)\n",
-			       cfx.prio, cfx.flags, cfx.sdt, cfx.af, dlen);
+			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+			       cfx.prio, cfx.flags, cfx.sdt, cfx.af,
+			       cfx.data[0], cfx.data[1], cfx.data[2],
+			       cfx.data[3], cfx.data[4], cfx.data[5],
+			       cfx.len);
 
 		if (gap)
 			if (nanosleep(&ts, NULL))
