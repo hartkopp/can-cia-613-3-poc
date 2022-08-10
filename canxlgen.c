@@ -19,7 +19,6 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-#define DEFAULT_SEG_SIZE 128
 #define DEFAULT_PRIO_ID 0x242
 #define DEFAULT_GAP 2
 #define DEFAULT_FROM 1

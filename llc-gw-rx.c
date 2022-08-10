@@ -18,9 +18,8 @@
 
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#include "cia-613-3.h"
 
-#define MIN_SEG_SIZE 64
-#define MAX_SEG_SIZE 1024
 #define DEFAULT_PRIO_ID 0x242
 
 extern int optind, opterr, optopt;
