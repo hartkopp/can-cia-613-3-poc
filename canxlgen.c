@@ -64,7 +64,7 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
-			if (from < CANXL_MIN_DLEN || to > CANXL_MAX_DLEN || from >= to) {
+			if (from < CANXL_MIN_DLEN || to > CANXL_MAX_DLEN || from > to) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
