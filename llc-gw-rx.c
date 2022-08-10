@@ -48,6 +48,7 @@ int main(int argc, char **argv)
 	struct canxl_frame cfsrc, cfdst;
 	int nbytes, ret;
 	int sockopt = 1;
+	struct timeval tv;
 
 	while ((opt = getopt(argc, argv, "p:vh?")) != -1) {
 		switch (opt) {
@@ -162,6 +163,16 @@ int main(int argc, char **argv)
 		}
 
 		if (verbose) {
+
+			if (ioctl(src, SIOCGSTAMP, &tv) < 0) {
+				perror("SIOCGSTAMP");
+				return 1;
+			} else {
+				printf("(%ld.%06ld) %s ",
+				       tv.tv_sec, tv.tv_usec,
+				       argv[optind]);
+			}
+
 			printf("%03X###%02X%02X%08X(%d)\n",
 			       cfsrc.prio, cfsrc.flags, cfsrc.sdt,
 			       cfsrc.af, cfsrc.len);

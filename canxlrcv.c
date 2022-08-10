@@ -32,6 +32,7 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	int nbytes, ret, i;
 	int sockopt = 1;
+	struct timeval tv;
 	union {
 		struct can_frame cc;
 		struct canfd_frame fd;
@@ -77,6 +78,15 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		
+		if (ioctl(s, SIOCGSTAMP, &tv) < 0) {
+			perror("SIOCGSTAMP");
+			return 1;
+		} else {
+			printf("(%ld.%06ld) %s ",
+			       tv.tv_sec, tv.tv_usec,
+			       argv[optind]);
+		}
+
 		if (nbytes < CANXL_HDR_SIZE + CANXL_MIN_DLEN) {
 			fprintf(stderr, "read: no CAN frame\n");
 			return 1;
