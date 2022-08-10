@@ -21,6 +21,7 @@
 #include "cia-613-3.h"
 
 #define DEFAULT_TRANSFER_ID 0x242
+#define NO_FCNT_VALUE 0xFFFF0000U
 
 extern int optind, opterr, optopt;
 
@@ -37,7 +38,10 @@ void print_usage(char *prg)
 int main(int argc, char **argv)
 {
 	int opt;
-	unsigned int segsz;
+	unsigned int segsz = 0;
+	unsigned int rxsegsz;
+	unsigned int fcnt = NO_FCNT_VALUE;
+	unsigned int rxfcnt;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
 
@@ -45,6 +49,9 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
 	struct canxl_frame cfsrc, cfdst;
+	struct llc_613_3 *llc = (struct llc_613_3 *) cfsrc.data;
+	unsigned int dataptr = 0;
+
 	int nbytes, ret;
 	int sockopt = 1;
 	struct timeval tv;
@@ -161,6 +168,12 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
+		if (cfsrc.len < CANXL_MIN_DLEN + LLC_613_3_SIZE) {
+			printf("nbytes = %d\n", nbytes);
+			fprintf(stderr, "read: no CAN XL LLC frame\n");
+			return 1;
+		}
+
 		if (verbose) {
 
 			if (ioctl(src, SIOCGSTAMP, &tv) < 0) {
@@ -172,40 +185,180 @@ int main(int argc, char **argv)
 				       argv[optind]);
 			}
 
-			printf("%03X###%02X%02X%08X(%d)\n",
-			       cfsrc.prio, cfsrc.flags, cfsrc.sdt,
-			       cfsrc.af, cfsrc.len);
+			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+			       cfsrc.prio, cfsrc.flags, cfsrc.sdt, cfsrc.af,
+			       cfsrc.data[0], cfsrc.data[1], cfsrc.data[2],
+			       cfsrc.data[3], cfsrc.data[4], cfsrc.data[5],
+			       cfsrc.len);
 			fflush(stdout);
 		}
 
-		/* send unsegmented frame(s) */
-		memcpy(&cfdst, &cfsrc, sizeof(struct canxl_frame));
-
-		nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
-		if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
-			printf("nbytes = %d\n", nbytes);
-			perror("write dst canxl_frame");
-			exit(1);
+		/* common FCNT handling */
+		rxfcnt = (llc->fcnt_hi<<8) + llc->fcnt_lo;
+		if (fcnt == NO_FCNT_VALUE) {
+			/* first reception */
+			fcnt = rxfcnt;
+		} else if (fcnt == rxfcnt) {
+			printf("dropped frame with identical FCNT!\n");
+			continue;
 		}
 
-#if 0
-		for (dlen = from; dlen <= to; dlen++) {
-			cfx.len = dlen;
+		/* decrease length for the LLC information */
+		rxsegsz = cfsrc.len - LLC_613_3_SIZE;
 
-			nbytes = write(s, &cfx, CANXL_HDR_SIZE + dlen);
-			if (nbytes != CANXL_HDR_SIZE + dlen) {
+		if ((llc->pci & PCI_XF_MASK) == PCI_SF) {
+
+			/* take current rxfcnt as fcnt */ 
+			fcnt = rxfcnt;
+
+			/* copy CAN XL header w/o data */
+			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+
+			/* length without the LLC information */
+			cfdst.len = rxsegsz;
+
+			/* copy CAN XL fragment data w/o LLC information */
+			memcpy(&cfdst.data[0], &cfsrc.data[LLC_613_3_SIZE], cfdst.len);
+
+			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
+			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
 				printf("nbytes = %d\n", nbytes);
-				perror("write can_frame");
+				perror("write dst canxl_frame");
 				exit(1);
 			}
 
-			if (verbose)
-				printf("%03X###%02X%02X%08X(%d)\n",
-				       cfx.prio, cfx.flags, cfx.sdt, cfx.af, dlen);
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
 
-		}
-#endif
-	}
+			continue; /* wait for next frame */
+		} /* SF */
+
+		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
+
+			if (rxsegsz <  MIN_SEG_SIZE || rxsegsz > MAX_SEG_SIZE) {
+				printf("dropped LLC frame illegal fragment size!\n");
+				continue;
+			}
+
+			/* take current rxfcnt as initial fcnt */ 
+			fcnt = rxfcnt;
+
+			/* copy CAN XL header w/o data */
+			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+
+			/* length without the LLC information */
+			cfdst.len = rxsegsz;
+
+			/* copy CAN XL fragment data w/o LLC information */
+			memcpy(&cfdst.data[0], &cfsrc.data[LLC_613_3_SIZE], cfdst.len);
+
+			/* set data pointer for next fragment data */
+			dataptr = cfdst.len;
+
+			/* get fragment size from first frame */
+			segsz = cfdst.len;
+
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
+
+			continue; /* wait for next frame */
+		} /* FF */
+
+		if ((llc->pci & PCI_XF_MASK) == PCI_CF) {
+
+			/* check that rxfcnt has increased */ 
+			if (fcnt + 1 != rxfcnt) {
+				printf("dropped CF frame wrong FCNT! (%d/%d)\n",
+				       fcnt, rxfcnt);
+				continue;
+			}
+
+			/* update fcnt */
+			fcnt = rxfcnt;
+
+			/* check fragment size in consecutive frames */
+			if (rxsegsz != segsz) {
+				printf("dropped CF frame wrong fragment size!\n");
+				continue;
+			}
+
+			/* copy CAN XL fragment data w/o LLC information */
+			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxsegsz);
+
+			/* set data pointer for next fragment data */
+			dataptr += rxsegsz;
+			cfdst.len += rxsegsz;
+
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
+
+			continue; /* wait for next frame */
+		} /* CF */
+
+		if ((llc->pci & PCI_XF_MASK) == PCI_LF) {
+
+			/* check that rxfcnt has increased */ 
+			if (fcnt + 1 != rxfcnt) {
+				printf("dropped LF frame wrong FCNT! (%d/%d)\n",
+				       fcnt, rxfcnt);
+				continue;
+			}
+
+			/* update fcnt */
+			fcnt = rxfcnt;
+
+			/* check fragment size in consecutive frames */
+			if (rxsegsz > segsz) {
+				printf("dropped LF frame wrong fragment size!\n");
+				continue;
+			}
+
+			/* copy CAN XL fragment data w/o LLC information */
+			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxsegsz);
+
+			/* set data pointer for next fragment data */
+			dataptr += rxsegsz;
+			cfdst.len += rxsegsz;
+
+			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
+			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
+				printf("nbytes = %d\n", nbytes);
+				perror("write dst canxl_frame");
+				exit(1);
+			}
+
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
+
+			continue; /* wait for next frame */
+		} /* LF */
+
+	} /* while(1) */
+
 	close(src);
 	close(dst);
 
