@@ -40,6 +40,7 @@ int main(int argc, char **argv)
 {
 	int opt;
 	unsigned int segsz = DEFAULT_SEG_SIZE;
+	unsigned int fcnt = 0;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
 
@@ -47,6 +48,9 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
 	struct canxl_frame cfsrc, cfdst;
+	struct llc_613_3 *llc = (struct llc_613_3 *) cfdst.data;
+	unsigned int dataptr = 0;
+
 	int nbytes, ret;
 	int sockopt = 1;
 	struct timeval tv;
@@ -182,39 +186,107 @@ int main(int argc, char **argv)
 				       argv[optind]);
 			}
 
-			printf("%03X###%02X%02X%08X(%d)\n",
-			       cfsrc.prio, cfsrc.flags, cfsrc.sdt,
-			       cfsrc.af, cfsrc.len);
+			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+			       cfsrc.prio, cfsrc.flags, cfsrc.sdt, cfsrc.af,
+			       cfsrc.data[0], cfsrc.data[1], cfsrc.data[2],
+			       cfsrc.data[3], cfsrc.data[4], cfsrc.data[5],
+			       cfsrc.len);
 			fflush(stdout);
+		}
+
+		/* check for single frame */
+		if (cfsrc.len <= segsz) {
+
+			/* copy CAN XL header w/o data */
+			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+
+			/* fill LLC information */
+			llc->pci = PCI_SF;
+			llc->res = 0;
+			llc->fcnt_hi = (fcnt>>8) & 0xFF;
+			llc->fcnt_lo = fcnt & 0xFF;
+
+			/* copy CAN XL fragment data */
+			memcpy(&cfdst.data[4], &cfsrc.data[0], cfsrc.len);
+
+			/* increase length for the LLC information */
+			cfdst.len += LLC_613_3_SIZE;
+
+			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
+			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
+				printf("nbytes = %d\n", nbytes);
+				perror("write SF dst canxl_frame");
+				exit(1);
+			}
+
+			/* update FCNT */
+			fcnt++;
+			fcnt &= 0xFFFFU;
+
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
+
+			continue; /* wait for next frame */
 		}
 
 		/* send segmented frame(s) */
 		memcpy(&cfdst, &cfsrc, sizeof(struct canxl_frame));
 
-		nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
-		if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
-			printf("nbytes = %d\n", nbytes);
-			perror("write dst canxl_frame");
-			exit(1);
-		}
+		for (dataptr = 0; dataptr < cfsrc.len; dataptr += segsz) {
 
-#if 0
-		for (dlen = from; dlen <= to; dlen++) {
-			cfx.len = dlen;
+			/* copy CAN XL header w/o data */
+			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
 
-			nbytes = write(s, &cfx, CANXL_HDR_SIZE + dlen);
-			if (nbytes != CANXL_HDR_SIZE + dlen) {
+			/* fill LLC information */
+			llc->res = 0;
+			llc->fcnt_hi = (fcnt>>8) & 0xFF;
+			llc->fcnt_lo = fcnt & 0xFF;
+
+			/* start of segmentation => set FF */
+			if (dataptr == 0)
+				llc->pci = PCI_FF;
+			else
+				llc->pci = PCI_CF;
+
+			/* copy CAN XL fragment data */
+			if (cfsrc.len - dataptr > segsz) {
+				/* FF / CF */
+				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], segsz);
+				/* increase length for the LLC information */
+				cfdst.len = segsz + LLC_613_3_SIZE;
+			} else {
+				/* LF */
+				llc->pci = PCI_LF;
+				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], cfsrc.len - dataptr);
+				cfdst.len = cfsrc.len - dataptr + LLC_613_3_SIZE;
+			}
+
+			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
+			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
 				printf("nbytes = %d\n", nbytes);
-				perror("write can_frame");
+				perror("write non-SF dst canxl_frame");
 				exit(1);
 			}
 
-			if (verbose)
-				printf("%03X###%02X%02X%08X(%d)\n",
-				       cfx.prio, cfx.flags, cfx.sdt, cfx.af, dlen);
+			/* update FCNT */
+			fcnt++;
+			fcnt &= 0xFFFFU;
 
+			if (verbose) {
+				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
+				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
+				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
+				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
+				       cfdst.len);
+				fflush(stdout);
+			}
 		}
-#endif
 	}
 	close(src);
 	close(dst);
