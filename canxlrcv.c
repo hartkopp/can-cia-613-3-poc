@@ -15,6 +15,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
+#include <linux/sockios.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
