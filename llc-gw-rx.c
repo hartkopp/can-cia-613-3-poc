@@ -39,8 +39,8 @@ void print_usage(char *prg)
 int main(int argc, char **argv)
 {
 	int opt;
-	unsigned int segsz = 0;
-	unsigned int rxsegsz;
+	unsigned int fragsz = 0;
+	unsigned int rxfragsz;
 	unsigned int fcnt = NO_FCNT_VALUE;
 	unsigned int rxfcnt;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
 
 	while (1) {
 
-		/* read segmented source frame */
+		/* read fragmented source frame */
 		nbytes = read(src, &cfsrc, sizeof(struct canxl_frame));
 		if (nbytes < 0) {
 			perror("read");
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 		}
 
 		/* decrease length for the LLC information */
-		rxsegsz = cfsrc.len - LLC_613_3_SIZE;
+		rxfragsz = cfsrc.len - LLC_613_3_SIZE;
 
 		if ((llc->pci & PCI_XF_MASK) == PCI_SF) {
 
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
 			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
 
 			/* length without the LLC information */
-			cfdst.len = rxsegsz;
+			cfdst.len = rxfragsz;
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[0], &cfsrc.data[LLC_613_3_SIZE], cfdst.len);
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
 
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
 
-			if (rxsegsz <  MIN_SEG_SIZE || rxsegsz > MAX_SEG_SIZE) {
+			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				printf("dropped LLC frame illegal fragment size!\n");
 				continue;
 			}
@@ -254,7 +254,7 @@ int main(int argc, char **argv)
 			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
 
 			/* length without the LLC information */
-			cfdst.len = rxsegsz;
+			cfdst.len = rxfragsz;
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[0], &cfsrc.data[LLC_613_3_SIZE], cfdst.len);
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
 			dataptr = cfdst.len;
 
 			/* get fragment size from first frame */
-			segsz = cfdst.len;
+			fragsz = cfdst.len;
 
 			if (verbose) {
 				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
@@ -290,17 +290,17 @@ int main(int argc, char **argv)
 			fcnt = rxfcnt;
 
 			/* check fragment size in consecutive frames */
-			if (rxsegsz != segsz) {
+			if (rxfragsz != fragsz) {
 				printf("dropped CF frame wrong fragment size!\n");
 				continue;
 			}
 
 			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxsegsz);
+			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxfragsz);
 
 			/* set data pointer for next fragment data */
-			dataptr += rxsegsz;
-			cfdst.len += rxsegsz;
+			dataptr += rxfragsz;
+			cfdst.len += rxfragsz;
 
 			if (verbose) {
 				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
@@ -327,17 +327,17 @@ int main(int argc, char **argv)
 			fcnt = rxfcnt;
 
 			/* check fragment size in consecutive frames */
-			if (rxsegsz > segsz) {
+			if (rxfragsz > fragsz) {
 				printf("dropped LF frame wrong fragment size!\n");
 				continue;
 			}
 
 			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxsegsz);
+			memcpy(&cfdst.data[dataptr], &cfsrc.data[LLC_613_3_SIZE], rxfragsz);
 
 			/* set data pointer for next fragment data */
-			dataptr += rxsegsz;
-			cfdst.len += rxsegsz;
+			dataptr += rxfragsz;
+			cfdst.len += rxfragsz;
 
 			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
 			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {

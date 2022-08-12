@@ -30,8 +30,8 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 sender\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <src_if> <dst_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -s <segsize>     (segment size "
-		"- default: %d bytes)\n", DEFAULT_SEG_SIZE);
+	fprintf(stderr, "         -f <fragsize>     (fragment size "
+		"- default: %d bytes)\n", DEFAULT_FRAG_SIZE);
 	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
 	fprintf(stderr, "         -v               (verbose)\n");
@@ -40,7 +40,7 @@ void print_usage(char *prg)
 int main(int argc, char **argv)
 {
 	int opt;
-	unsigned int segsz = DEFAULT_SEG_SIZE;
+	unsigned int fragsz = DEFAULT_FRAG_SIZE;
 	unsigned int fcnt = 0;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
@@ -56,12 +56,12 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "s:t:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "f:t:vh?")) != -1) {
 		switch (opt) {
 
-		case 's':
-			segsz = strtoul(optarg, NULL, 10);
-			if (segsz < MIN_SEG_SIZE || segsz > MAX_SEG_SIZE) {
+		case 'f':
+			fragsz = strtoul(optarg, NULL, 10);
+			if (fragsz < MIN_FRAG_SIZE || fragsz > MAX_FRAG_SIZE) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
 		}
 
 		/* check for single frame */
-		if (cfsrc.len <= segsz) {
+		if (cfsrc.len <= fragsz) {
 
 			/* copy CAN XL header w/o data */
 			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
@@ -236,10 +236,10 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		}
 
-		/* send segmented frame(s) */
+		/* send fragmented frame(s) */
 		memcpy(&cfdst, &cfsrc, sizeof(struct canxl_frame));
 
-		for (dataptr = 0; dataptr < cfsrc.len; dataptr += segsz) {
+		for (dataptr = 0; dataptr < cfsrc.len; dataptr += fragsz) {
 
 			/* copy CAN XL header w/o data */
 			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
@@ -249,18 +249,18 @@ int main(int argc, char **argv)
 			llc->fcnt_hi = (fcnt>>8) & 0xFF;
 			llc->fcnt_lo = fcnt & 0xFF;
 
-			/* start of segmentation => set FF */
+			/* start of fragmentation => set FF */
 			if (dataptr == 0)
 				llc->pci = PCI_FF;
 			else
 				llc->pci = PCI_CF;
 
 			/* copy CAN XL fragment data */
-			if (cfsrc.len - dataptr > segsz) {
+			if (cfsrc.len - dataptr > fragsz) {
 				/* FF / CF */
-				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], segsz);
+				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], fragsz);
 				/* increase length for the LLC information */
-				cfdst.len = segsz + LLC_613_3_SIZE;
+				cfdst.len = fragsz + LLC_613_3_SIZE;
 			} else {
 				/* LF */
 				llc->pci = PCI_LF;

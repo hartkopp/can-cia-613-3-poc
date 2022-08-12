@@ -9,9 +9,9 @@
 
 #include <linux/types.h>
 
-#define DEFAULT_SEG_SIZE 128
-#define MIN_SEG_SIZE 64
-#define MAX_SEG_SIZE 1024
+#define DEFAULT_FRAG_SIZE 128
+#define MIN_FRAG_SIZE 64
+#define MAX_FRAG_SIZE 1024
 
 #define PCI_CF 0x00 /* Consecutive Frame */
 #define PCI_LF 0x40 /* Last Frame */
