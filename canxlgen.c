@@ -26,6 +26,23 @@
 
 extern int optind, opterr, optopt;
 
+static void printxlframe(struct canxl_frame *cfx)
+{
+	int i;
+
+	/* print prio and CAN XL header content */
+	printf("%03X###%02X%02X%08X",
+	       cfx->prio, cfx->flags, cfx->sdt, cfx->af);
+
+	/* print up to 8 data bytes */
+	for (i = 0; i < cfx->len && i < 8; i++)
+		printf("%02X", cfx->data[i]);
+
+	/* print CAN XL data length */
+	printf("(%d)\n", cfx->len);
+	fflush(stdout);
+}
+
 void print_usage(char *prg)
 {
 	fprintf(stderr, "%s - CAN XL frame generator\n\n", prg);
@@ -148,11 +165,7 @@ int main(int argc, char **argv)
 		}
 
 		if (verbose)
-			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
-			       cfx.prio, cfx.flags, cfx.sdt, cfx.af,
-			       cfx.data[0], cfx.data[1], cfx.data[2],
-			       cfx.data[3], cfx.data[4], cfx.data[5],
-			       cfx.len);
+			printxlframe(&cfx);
 
 		if (gap)
 			if (nanosleep(&ts, NULL))

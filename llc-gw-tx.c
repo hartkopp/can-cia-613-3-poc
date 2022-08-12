@@ -25,6 +25,23 @@
 
 extern int optind, opterr, optopt;
 
+static void printxlframe(struct canxl_frame *cfx)
+{
+	int i;
+
+	/* print prio and CAN XL header content */
+	printf("%03X###%02X%02X%08X",
+	       cfx->prio, cfx->flags, cfx->sdt, cfx->af);
+
+	/* print up to 8 data bytes */
+	for (i = 0; i < cfx->len && i < 8; i++)
+		printf("%02X", cfx->data[i]);
+
+	/* print CAN XL data length */
+	printf("(%d)\n", cfx->len);
+	fflush(stdout);
+}
+
 void print_usage(char *prg)
 {
 	fprintf(stderr, "%s - CAN XL CiA 613-3 sender\n\n", prg);
@@ -88,21 +105,25 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* src_if and dst_if are two mandatory parameters */
 	if (argc - optind != 2) {
 		print_usage(basename(argv[0]));
 		exit(0);
 	}
 
+	/* src_if */
 	if (strlen(argv[optind]) >= IFNAMSIZ) {
-		printf("Name of CAN device '%s' is too long!\n\n", argv[optind]);
+		printf("Name of src CAN device '%s' is too long!\n\n", argv[optind]);
 		return 1;
 	}
 
+	/* dst_if */
 	if (strlen(argv[optind + 1]) >= IFNAMSIZ) {
-		printf("Name of CAN device '%s' is too long!\n\n", argv[optind]);
+		printf("Name of dst CAN device '%s' is too long!\n\n", argv[optind]);
 		return 1;
 	}
 
+	/* open src socket */
 	src = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 	if (src < 0) {
 		perror("src socket");
@@ -111,6 +132,7 @@ int main(int argc, char **argv)
 	addr.can_family = AF_CAN;
 	addr.can_ifindex = if_nametoindex(argv[optind]);
 
+	/* enable CAN XL frames */
 	ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_XL_FRAMES,
 			 &sockopt, sizeof(sockopt));
 	if (ret < 0) {
@@ -118,6 +140,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	/* filter only for transfer_id (= prio_id) */
 	rfilter.can_id = transfer_id;
 	rfilter.can_mask = CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_SFF_MASK;
 	ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
@@ -131,6 +154,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	/* open dst socket */
 	dst = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 	if (dst < 0) {
 		perror("dst socket");
@@ -139,6 +163,7 @@ int main(int argc, char **argv)
 	addr.can_family = AF_CAN;
 	addr.can_ifindex = if_nametoindex(argv[optind + 1]);
 
+	/* enable CAN XL frames */
 	ret = setsockopt(dst, SOL_CAN_RAW, CAN_RAW_XL_FRAMES,
 			 &sockopt, sizeof(sockopt));
 	if (ret < 0) {
@@ -151,6 +176,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	/* main loop */
 	while (1) {
 
 		/* read source frame */
@@ -177,22 +203,16 @@ int main(int argc, char **argv)
 		}
 
 		if (verbose) {
-
 			if (ioctl(src, SIOCGSTAMP, &tv) < 0) {
 				perror("SIOCGSTAMP");
 				return 1;
-			} else {
-				printf("(%ld.%06ld) %s ",
-				       tv.tv_sec, tv.tv_usec,
-				       argv[optind]);
 			}
 
-			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
-			       cfsrc.prio, cfsrc.flags, cfsrc.sdt, cfsrc.af,
-			       cfsrc.data[0], cfsrc.data[1], cfsrc.data[2],
-			       cfsrc.data[3], cfsrc.data[4], cfsrc.data[5],
-			       cfsrc.len);
-			fflush(stdout);
+			/* print timestamp and device name */
+			printf("\n(%ld.%06ld) %s ", tv.tv_sec, tv.tv_usec,
+			       argv[optind]);
+
+			printxlframe(&cfsrc);
 		}
 
 		/* check for single frame */
@@ -225,14 +245,9 @@ int main(int argc, char **argv)
 			fcnt &= 0xFFFFU;
 
 			if (verbose) {
-				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
-				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
-				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
-				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
-				       cfdst.len);
-				fflush(stdout);
+				printf("TX - ");
+				printxlframe(&cfdst);
 			}
-
 			continue; /* wait for next frame */
 		}
 
@@ -280,12 +295,8 @@ int main(int argc, char **argv)
 			fcnt &= 0xFFFFU;
 
 			if (verbose) {
-				printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
-				       cfdst.prio, cfdst.flags, cfdst.sdt, cfdst.af,
-				       cfdst.data[0], cfdst.data[1], cfdst.data[2],
-				       cfdst.data[3], cfdst.data[4], cfdst.data[5],
-				       cfdst.len);
-				fflush(stdout);
+				printf("TX - ");
+				printxlframe(&cfdst);
 			}
 		}
 	}

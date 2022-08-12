@@ -21,6 +21,23 @@
 
 extern int optind, opterr, optopt;
 
+static void printxlframe(struct canxl_frame *cfx)
+{
+	int i;
+
+	/* print prio and CAN XL header content */
+	printf("%03X###%02X%02X%08X",
+	       cfx->prio, cfx->flags, cfx->sdt, cfx->af);
+
+	/* print up to 8 data bytes */
+	for (i = 0; i < cfx->len && i < 8; i++)
+		printf("%02X", cfx->data[i]);
+
+	/* print CAN XL data length */
+	printf("(%d)\n", cfx->len);
+	fflush(stdout);
+}
+
 void print_usage(char *prg)
 {
 	fprintf(stderr, "%s - CAN XL frame receiver\n\n", prg);
@@ -99,12 +116,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, "read: no CAN XL frame\n");
 				return 1;
 			}
-			printf("%03X###%02X%02X%08X[%02X%02X%02X%02X%02X%02X](%d)\n",
-			       can.xl.prio, can.xl.flags, can.xl.sdt, can.xl.af,
-			       can.xl.data[0], can.xl.data[1], can.xl.data[2],
-			       can.xl.data[3], can.xl.data[4], can.xl.data[5],
-			       can.xl.len);
-			fflush(stdout);
+			printxlframe(&can.xl);
 			continue;
 		}
 
