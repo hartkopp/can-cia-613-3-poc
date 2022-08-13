@@ -319,6 +319,12 @@ int main(int argc, char **argv)
 				continue;
 			}
 
+			/* make sure the data fits into the unfragmented frame */
+			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
+				printf("dropped CF frame size overflow!\n");
+				continue;
+			}
+
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[dataptr],
 			       &cfsrc.data[LLC_613_3_SIZE],
@@ -352,6 +358,12 @@ int main(int argc, char **argv)
 			/* check fragment size in consecutive frames */
 			if (rxfragsz > fragsz) {
 				printf("dropped LF frame wrong fragment size!\n");
+				continue;
+			}
+
+			/* make sure the data fits into the unfragmented frame */
+			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
+				printf("dropped LF frame size overflow!\n");
 				continue;
 			}
 
