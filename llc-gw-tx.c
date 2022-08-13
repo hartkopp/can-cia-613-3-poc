@@ -113,13 +113,15 @@ int main(int argc, char **argv)
 
 	/* src_if */
 	if (strlen(argv[optind]) >= IFNAMSIZ) {
-		printf("Name of src CAN device '%s' is too long!\n\n", argv[optind]);
+		printf("Name of src CAN device '%s' is too long!\n\n",
+		       argv[optind]);
 		return 1;
 	}
 
 	/* dst_if */
 	if (strlen(argv[optind + 1]) >= IFNAMSIZ) {
-		printf("Name of dst CAN device '%s' is too long!\n\n", argv[optind]);
+		printf("Name of dst CAN device '%s' is too long!\n\n",
+		       argv[optind]);
 		return 1;
 	}
 
@@ -143,7 +145,8 @@ int main(int argc, char **argv)
 	/* filter only for transfer_id (= prio_id) */
 	rfilter.can_id = transfer_id;
 	rfilter.can_mask = CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_SFF_MASK;
-	ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_FILTER, &rfilter, sizeof(rfilter));
+	ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_FILTER,
+			 &rfilter, sizeof(rfilter));
 	if (ret < 0) {
 		perror("src sockopt CAN_RAW_FILTER");
 		exit(1);
@@ -179,7 +182,7 @@ int main(int argc, char **argv)
 	/* main loop */
 	while (1) {
 
-		/* read source frame */
+		/* read source CAN XL frame */
 		nbytes = read(src, &cfsrc, sizeof(struct canxl_frame));
 		if (nbytes < 0) {
 			perror("read");
@@ -228,7 +231,8 @@ int main(int argc, char **argv)
 			llc->fcnt_lo = fcnt & 0xFF;
 
 			/* copy CAN XL fragment data */
-			memcpy(&cfdst.data[4], &cfsrc.data[0], cfsrc.len);
+			memcpy(&cfdst.data[LLC_613_3_SIZE],
+			       &cfsrc.data[0], cfsrc.len);
 
 			/* increase length for the LLC information */
 			cfdst.len += LLC_613_3_SIZE;
@@ -252,37 +256,42 @@ int main(int argc, char **argv)
 		}
 
 		/* send fragmented frame(s) */
-		memcpy(&cfdst, &cfsrc, sizeof(struct canxl_frame));
-
 		for (dataptr = 0; dataptr < cfsrc.len; dataptr += fragsz) {
 
-			/* copy CAN XL header w/o data */
-			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+			/* start of fragmentation => set FF */
+			if (dataptr == 0) {
+				llc->pci = PCI_FF;
 
-			/* fill LLC information */
-			llc->res = 0;
+				/* initial copy of CAN XL header w/o data */
+				memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+
+				/* initialize fixed LLC information */
+				llc->res = 0;
+			} else {
+				llc->pci = PCI_CF;
+			}
+
+			/* set current FCNT counter into LLC information */
 			llc->fcnt_hi = (fcnt>>8) & 0xFF;
 			llc->fcnt_lo = fcnt & 0xFF;
 
-			/* start of fragmentation => set FF */
-			if (dataptr == 0)
-				llc->pci = PCI_FF;
-			else
-				llc->pci = PCI_CF;
-
-			/* copy CAN XL fragment data */
+			/* copy CAN XL fragmented data content */
 			if (cfsrc.len - dataptr > fragsz) {
 				/* FF / CF */
-				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], fragsz);
+				memcpy(&cfdst.data[LLC_613_3_SIZE],
+				       &cfsrc.data[dataptr], fragsz);
 				/* increase length for the LLC information */
 				cfdst.len = fragsz + LLC_613_3_SIZE;
 			} else {
 				/* LF */
 				llc->pci = PCI_LF;
-				memcpy(&cfdst.data[4], &cfsrc.data[dataptr], cfsrc.len - dataptr);
+				memcpy(&cfdst.data[LLC_613_3_SIZE],
+				       &cfsrc.data[dataptr],
+				       cfsrc.len - dataptr);
 				cfdst.len = cfsrc.len - dataptr + LLC_613_3_SIZE;
 			}
 
+			/* write fragment frame */
 			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
 			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
 				printf("nbytes = %d\n", nbytes);
@@ -298,8 +307,9 @@ int main(int argc, char **argv)
 				printf("TX - ");
 				printxlframe(&cfdst);
 			}
-		}
-	}
+		} /* send fragmented frame(s) */
+	} /* while (1) */
+
 	close(src);
 	close(dst);
 
