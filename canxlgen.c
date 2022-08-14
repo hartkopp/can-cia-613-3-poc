@@ -54,6 +54,7 @@ void print_usage(char *prg)
 		"- default: %d ms)\n", DEFAULT_GAP);
 	fprintf(stderr, "         -p <prio_id>   (PRIO ID "
 		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
+	fprintf(stderr, "         -P             (create data pattern)\n");
 	fprintf(stderr, "         -v             (verbose)\n");
 }
 
@@ -64,16 +65,17 @@ int main(int argc, char **argv)
 	unsigned int from = DEFAULT_FROM;
 	unsigned int to = DEFAULT_TO;
 	canid_t prio = DEFAULT_PRIO_ID;
+	int create_pattern = 0;
 	int verbose = 0;
 
 	int s;
 	struct sockaddr_can addr;
 	struct timespec ts;
-	struct canxl_frame cfx;
-	int nbytes, ret, dlen;
+	struct canxl_frame cfx = {0};
+	int nbytes, ret, dlen, i;
 	int sockopt = 1;
 
-	while ((opt = getopt(argc, argv, "l:g:p:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:g:p:Pvh?")) != -1) {
 		switch (opt) {
 
 		case 'l':
@@ -97,6 +99,10 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
+			break;
+
+		case 'P':
+			create_pattern = 1;
 			break;
 
 		case 'v':
@@ -149,14 +155,16 @@ int main(int argc, char **argv)
 	cfx.flags = CANXL_XLF;
 	cfx.sdt = 0;
 	cfx.af = 0xAFAFAFAF;
-	memset(cfx.data, 0xCC, CANXL_MAX_DLEN);
-	cfx.data[0] = 0xAB;
-	cfx.data[1] = 0xCD;
-	cfx.data[2] = 0xEF;
 
 	for (dlen = from; dlen <= to; dlen++) {
 		cfx.len = dlen;
 
+		/* fill data with a length depended content */
+		if (create_pattern)
+			for (i = 0; i < dlen; i++)
+				cfx.data[i] = (dlen + i) & 0xFFU;
+
+		/* write CAN XL frame */
 		nbytes = write(s, &cfx, CANXL_HDR_SIZE + dlen);
 		if (nbytes != CANXL_HDR_SIZE + dlen) {
 			printf("nbytes = %d\n", nbytes);

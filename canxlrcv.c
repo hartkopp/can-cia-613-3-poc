@@ -42,14 +42,17 @@ void print_usage(char *prg)
 {
 	fprintf(stderr, "%s - CAN XL frame receiver\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <CAN interface>\n", prg);
+	fprintf(stderr, "         -P (check data pattern)\n");
 }
 
 int main(int argc, char **argv)
 {
+	int opt;
 	int s;
 	struct sockaddr_can addr;
 	int nbytes, ret, i;
 	int sockopt = 1;
+	int check_pattern = 0;
 	struct timeval tv;
 	union {
 		struct can_frame cc;
@@ -57,6 +60,21 @@ int main(int argc, char **argv)
 		struct canxl_frame xl;
 	} can;
 
+	while ((opt = getopt(argc, argv, "Ph?")) != -1) {
+		switch (opt) {
+
+		case 'P':
+			check_pattern = 1;
+			break;
+
+		case '?':
+		case 'h':
+		default:
+			print_usage(basename(argv[0]));
+			return 1;
+			break;
+		}
+	}
 
 	if (optind == argc) {
 		print_usage(basename(argv[0]));
@@ -115,6 +133,16 @@ int main(int argc, char **argv)
 				printf("nbytes = %d\n", nbytes);
 				fprintf(stderr, "read: no CAN XL frame\n");
 				return 1;
+			}
+
+			if (check_pattern) {
+				for (i = 0; i < can.xl.len; i++) {
+					if (can.xl.data[i] != ((can.xl.len + i) & 0xFFU)) {
+						fprintf(stderr, "check pattern failed %02X %04X\n",
+							can.xl.data[i], can.xl.len + i);
+						return 1;
+					}
+				}
 			}
 			printxlframe(&can.xl);
 			continue;
