@@ -15,8 +15,8 @@ CPPFLAGS += \
 PROGRAMS := \
 	canxlgen \
 	canxlrcv \
-	llc-gw-tx \
-	llc-gw-rx
+	cia613frag \
+	cia613join
 
 all: $(PROGRAMS)
 
