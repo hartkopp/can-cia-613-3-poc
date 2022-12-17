@@ -56,7 +56,6 @@ void print_usage(char *prg)
 int main(int argc, char **argv)
 {
 	int opt;
-	unsigned int fragsz = 0;
 	unsigned int rxfragsz;
 	unsigned int fcnt = NO_FCNT_VALUE;
 	unsigned int rxfcnt;
@@ -272,9 +271,6 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			/* get fragment size from first frame */
-			fragsz = rxfragsz;
-
 			/* take current rxfcnt as initial fcnt */ 
 			fcnt = rxfcnt;
 
@@ -313,12 +309,6 @@ int main(int argc, char **argv)
 			/* update fcnt after check */
 			fcnt = rxfcnt;
 
-			/* check fragment size in consecutive frames */
-			if (rxfragsz != fragsz) {
-				printf("dropped CF frame wrong fragment size!\n");
-				continue;
-			}
-
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
 				printf("dropped CF frame size overflow!\n");
@@ -354,12 +344,6 @@ int main(int argc, char **argv)
 
 			/* update fcnt */
 			fcnt = rxfcnt;
-
-			/* check fragment size in consecutive frames */
-			if (rxfragsz > fragsz) {
-				printf("dropped LF frame wrong fragment size!\n");
-				continue;
-			}
 
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
