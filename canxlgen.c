@@ -19,29 +19,14 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
+#include "printxlframe.h"
+
 #define DEFAULT_PRIO_ID 0x242
 #define DEFAULT_GAP 2
 #define DEFAULT_FROM 1
 #define DEFAULT_TO 2048
 
 extern int optind, opterr, optopt;
-
-static void printxlframe(struct canxl_frame *cfx)
-{
-	int i;
-
-	/* print prio and CAN XL header content */
-	printf("%03X###%02X%02X%08X",
-	       cfx->prio, cfx->flags, cfx->sdt, cfx->af);
-
-	/* print up to 12 data bytes */
-	for (i = 0; i < cfx->len && i < 12; i++)
-		printf("%02X", cfx->data[i]);
-
-	/* print CAN XL data length */
-	printf("(%d)\n", cfx->len);
-	fflush(stdout);
-}
 
 void print_usage(char *prg)
 {
