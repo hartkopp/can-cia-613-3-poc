@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 	struct canxl_frame cfsrc, cfdst;
 	struct llc_613_3 *llc = (struct llc_613_3 *) cfdst.data;
 	unsigned int dataptr = 0;
+	__u8 tx_pci = 0;
 
 	int nbytes, ret;
 	int sockopt = 1;
@@ -218,57 +219,51 @@ int main(int argc, char **argv)
 			printxlframe(&cfsrc);
 		}
 
-		/* check for single frame */
+		/* check for unsegmented transfer (forwarding) */
 		if (cfsrc.len <= fragsz) {
 
-			/* copy CAN XL header w/o data */
-			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
-
-			/* fill LLC information */
-			llc->pci = PCI_SF;
-			llc->res = 0;
-			llc->fcnt_hi = (fcnt>>8) & 0xFF;
-			llc->fcnt_lo = fcnt & 0xFF;
-
-			/* copy CAN XL fragment data */
-			memcpy(&cfdst.data[LLC_613_3_SIZE],
-			       &cfsrc.data[0], cfsrc.len);
-
-			/* increase length for the LLC information */
-			cfdst.len += LLC_613_3_SIZE;
-
-			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
-			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
+			/* just forward the unsegmented src frame */
+			nbytes = write(dst, &cfsrc, CANXL_HDR_SIZE + cfsrc.len);
+			if (nbytes != CANXL_HDR_SIZE + cfsrc.len) {
 				printf("nbytes = %d\n", nbytes);
-				perror("write SF dst canxl_frame");
+				perror("forward src canxl_frame");
 				exit(1);
 			}
 
-			/* update FCNT */
-			fcnt++;
-			fcnt &= 0xFFFFU;
-
 			if (verbose) {
-				printf("TX - ");
-				printxlframe(&cfdst);
+				printf("FW - ");
+				printxlframe(&cfsrc);
 			}
 			continue; /* wait for next frame */
 		}
 
 		/* send fragmented frame(s) */
+
+		/* initialize fixed LLC information */
+		llc->res = 0;
+
+		/* set protocol version number and AOT to tx_pci */
+		tx_pci = CIA_613_3_VERSION | CIA_613_3_AOT;
+
+		/* save original SEC bit for DLX (further SEC handling) */
+		if (cfsrc.flags & CANXL_SEC)
+			tx_pci |= PCI_SEC;
+
 		for (dataptr = 0; dataptr < cfsrc.len; dataptr += fragsz) {
 
-			/* start of fragmentation => set FF */
+			/* start of fragmentation => init header and set FF */
 			if (dataptr == 0) {
-				llc->pci = PCI_FF;
-
 				/* initial copy of CAN XL header w/o data */
 				memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
 
-				/* initialize fixed LLC information */
-				llc->res = 0;
+				/* set bit for segmentation in CAN XL header */
+				cfdst.flags |= CANXL_SEC;
+
+				/* first frame */
+				llc->pci = tx_pci | PCI_FF;
 			} else {
-				llc->pci = PCI_CF;
+				/* consecutive frame */
+				llc->pci = tx_pci; /* no FF/LF is set */
 			}
 
 			/* set current FCNT counter into LLC information */
@@ -283,8 +278,8 @@ int main(int argc, char **argv)
 				/* increase length for the LLC information */
 				cfdst.len = fragsz + LLC_613_3_SIZE;
 			} else {
-				/* LF */
-				llc->pci = PCI_LF;
+				/* last frame */
+				llc->pci = tx_pci | PCI_LF;
 				memcpy(&cfdst.data[LLC_613_3_SIZE],
 				       &cfsrc.data[dataptr],
 				       cfsrc.len - dataptr);
@@ -295,7 +290,7 @@ int main(int argc, char **argv)
 			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
 			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
 				printf("nbytes = %d\n", nbytes);
-				perror("write non-SF dst canxl_frame");
+				perror("write dst canxl_frame");
 				exit(1);
 			}
 

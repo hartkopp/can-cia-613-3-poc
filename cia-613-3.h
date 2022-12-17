@@ -2,6 +2,8 @@
 /*
  * cia-613-3.h - CAN CiA 613-3 definitions
  *
+ * add-on types (AOT) definitions see in CAN CiA 613-1
+ *
  */
 
 #ifndef CIA_613_3_H
@@ -13,12 +15,28 @@
 #define MIN_FRAG_SIZE 64
 #define MAX_FRAG_SIZE 1024
 
-#define PCI_CF 0x00 /* Consecutive Frame */
-#define PCI_LF 0x40 /* Last Frame */
-#define PCI_FF 0x80 /* First Frame */
-#define PCI_SF 0xC0 /* Single Frame */
+/* Protocol Control Information definitions: */
 
-#define PCI_XF_MASK 0xC0 /* mask for frame related PCI bits */
+/* frame type identification (both unset => consecutive frame) */
+#define PCI_LF    0x01 /* last frame */
+#define PCI_FF    0x02 /* first frame */
+
+/* protocol version */
+#define PCI_VL    0x04 /* version low bit */
+#define PCI_VH    0x08 /* version high bit */
+
+/* data link extension indicator (DLX) => SEC + AOT */
+#define PCI_SEC   0x10 /* (further) simple/extended content */
+#define PCI_AOTL  0x20 /* add-on type low bit */
+#define PCI_AOTM  0x40 /* add-on type mid bit */
+#define PCI_AOTH  0x80 /* add-on type high bit */
+
+#define PCI_AOT_MASK (PCI_AOTL | PCI_AOTM | PCI_AOTH)
+#define PCI_VX_MASK (PCI_VL | PCI_VH)
+#define PCI_XF_MASK (PCI_LF | PCI_FF)
+
+#define CIA_613_3_AOT     (PCI_AOTL) /* 001b - fragmentation add-on type */
+#define CIA_613_3_VERSION (PCI_VL)   /*  01b - protocol version 1 */
 
 struct llc_613_3 {
 	__u8 pci; /* protocol control information */

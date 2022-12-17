@@ -197,12 +197,6 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (cfsrc.len < CANXL_MIN_DLEN + LLC_613_3_SIZE) {
-			printf("nbytes = %d\n", nbytes);
-			fprintf(stderr, "read: no CAN XL LLC frame\n");
-			return 1;
-		}
-
 		if (verbose) {
 			if (ioctl(src, SIOCGSTAMP, &tv) < 0) {
 				perror("SIOCGSTAMP");
@@ -214,6 +208,26 @@ int main(int argc, char **argv)
 			       argv[optind]);
 
 			printxlframe(&cfsrc);
+		}
+
+		/* check for SEC bit and CiA 613-3 AOT (fragmentation) */
+		if (!((cfsrc.flags & CANXL_SEC) &&
+		      (cfsrc.len >= CANXL_MIN_DLEN + LLC_613_3_SIZE) &&
+		      ((llc->pci & PCI_AOT_MASK) == CIA_613_3_AOT))) {
+			/* no CiA 613-3 fragment frame => just forward frame */
+
+			nbytes = write(dst, &cfsrc, CANXL_HDR_SIZE + cfsrc.len);
+			if (nbytes != CANXL_HDR_SIZE + cfsrc.len) {
+				printf("nbytes = %d\n", nbytes);
+				perror("forward src canxl_frame");
+				exit(1);
+			}
+
+			if (verbose) {
+				printf("FW - ");
+				printxlframe(&cfsrc);
+			}
+			continue; /* wait for next frame */
 		}
 
 		/* common FCNT reception handling */
@@ -230,39 +244,6 @@ int main(int argc, char **argv)
 		/* retrieve real fragment data size from this CAN XL frame */
 		rxfragsz = cfsrc.len - LLC_613_3_SIZE;
 
-		/* check for single frame */
-		if ((llc->pci & PCI_XF_MASK) == PCI_SF) {
-
-			/* take current rxfcnt as fcnt */ 
-			fcnt = rxfcnt;
-
-			/* copy CAN XL header w/o data */
-			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
-
-			/* length without the LLC information */
-			cfdst.len = rxfragsz;
-
-			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[0],
-			       &cfsrc.data[LLC_613_3_SIZE],
-			       cfdst.len);
-
-			/* write 'reassembled' CAN XL frame */
-			nbytes = write(dst, &cfdst, CANXL_HDR_SIZE + cfdst.len);
-			if (nbytes != CANXL_HDR_SIZE + cfdst.len) {
-				printf("nbytes = %d\n", nbytes);
-				perror("write dst canxl_frame");
-				exit(1);
-			}
-
-			if (verbose) {
-				printf("TX - ");
-				printxlframe(&cfdst);
-				printf("\n");
-			}
-			continue; /* wait for next frame */
-		} /* SF */
-
 		/* check for first frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
 
@@ -276,6 +257,13 @@ int main(int argc, char **argv)
 
 			/* copy CAN XL header w/o data */
 			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+
+			/* clear SEC bit from our segmentation process */
+			cfdst.flags &= ~CANXL_SEC;
+
+			/* restore original SEC bit from DLX (for other AOT) */
+			if (llc->pci & PCI_SEC)
+				cfdst.flags |= CANXL_SEC;
 
 			/* 'reassembled' length without the LLC information */
 			cfdst.len = rxfragsz;
@@ -296,8 +284,8 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		} /* FF */
 
-		/* consecutive frame */
-		if ((llc->pci & PCI_XF_MASK) == PCI_CF) {
+		/* consecutive frame (FF/LF are unset) */
+		if ((llc->pci & PCI_XF_MASK) == 0) {
 
 			/* check that rxfcnt has increased */ 
 			if (fcnt + 1 != rxfcnt) {
@@ -374,6 +362,9 @@ int main(int argc, char **argv)
 			}
 			continue; /* wait for next frame */
 		} /* LF */
+
+		/* TODO: add handling for reserved FF/LF set bits here? */
+
 	} /* while(1) */
 
 	close(src);
