@@ -54,6 +54,7 @@ void print_usage(char *prg)
 		"- default: %d ms)\n", DEFAULT_GAP);
 	fprintf(stderr, "         -p <prio_id>   (PRIO ID "
 		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
+	fprintf(stderr, "         -s             (set SEC bit)\n");
 	fprintf(stderr, "         -P             (create data pattern)\n");
 	fprintf(stderr, "         -v             (verbose)\n");
 }
@@ -66,6 +67,7 @@ int main(int argc, char **argv)
 	unsigned int to = DEFAULT_TO;
 	canid_t prio = DEFAULT_PRIO_ID;
 	int create_pattern = 0;
+	__u8 sec_bit = 0;
 	int verbose = 0;
 
 	int s;
@@ -75,7 +77,7 @@ int main(int argc, char **argv)
 	int nbytes, ret, dlen, i;
 	int sockopt = 1;
 
-	while ((opt = getopt(argc, argv, "l:g:p:Pvh?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:g:p:sPvh?")) != -1) {
 		switch (opt) {
 
 		case 'l':
@@ -99,6 +101,10 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
+			break;
+
+		case 's':
+			sec_bit = CANXL_SEC;
 			break;
 
 		case 'P':
@@ -152,7 +158,7 @@ int main(int argc, char **argv)
 	}
 
 	cfx.prio = prio;
-	cfx.flags = CANXL_XLF;
+	cfx.flags = (CANXL_XLF | sec_bit);
 	cfx.sdt = 0;
 	cfx.af = 0xAFAFAFAF;
 
