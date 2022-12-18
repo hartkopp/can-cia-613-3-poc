@@ -1,5 +1,11 @@
 # can-cia-613-3-poc
-PoC for CAN CiA 613-3 LLC Frame Segmentation
+PoC for CAN CiA 613-3 LLC Frame Fragmentation
+
+* implementation of CAN XL frame (de)fragmentation
+* no CiA 613-3 rx buffer management
+* SEC handling for embedded add-on types (AOT)
+* add-on type (AOT) = 1 (001b)
+* protocol version = 1 (01b)
 
 ### Files
 
@@ -8,6 +14,10 @@ PoC for CAN CiA 613-3 LLC Frame Segmentation
 * cia613frag : fragment CAN XL frames according to CAN CiA 613-3
 * cia613join : join CAN XL frames according to CAN CiA 613-3
 * create_canxl_vcans.sh : script to create virtual CAN XL interfaces
+
+### PoC test setup and data flow
+
+<img src="https://github.com/hartkopp/can-cia-613-3-poc/blob/main/img/PoC-setup.png" width="800">
 
 ### Build the tools
 
