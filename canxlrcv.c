@@ -139,17 +139,29 @@ int main(int argc, char **argv)
 			return 1;
 		} else {
 			if (can.fd.can_id & CAN_EFF_FLAG)
-				printf("%8X  ", can.fd.can_id & CAN_EFF_MASK);
+				printf("%08X#", can.fd.can_id & CAN_EFF_MASK);
 			else
-				printf("%3X  ", can.fd.can_id & CAN_SFF_MASK);
+				printf("%03X#", can.fd.can_id & CAN_SFF_MASK);
 
-			printf("[%d] ", can.fd.len);
+			if (nbytes == sizeof(struct canfd_frame)) {
+				printf("#%X", can.fd.flags & 0xF);
 
-			for (i = 0; i < can.fd.len; i++) {
-				printf("%02X ", can.fd.data[i]);
+				for (i = 0; i < can.fd.len; i++)
+					printf("%02X", can.fd.data[i]);
+			} else {
+				if (can.cc.can_id & CAN_RTR_FLAG) {
+					printf("R");
+					if (can.cc.len > 0)
+						printf("%d", can.cc.len);
+				} else {
+					for (i = 0; i < can.cc.len; i++)
+						printf("%02X", can.cc.data[i]);
+				}
+				if (can.cc.len == CAN_MAX_DLEN &&
+				    can.cc.len8_dlc > CAN_MAX_DLEN &&
+				    can.cc.len8_dlc <= CAN_MAX_RAW_DLC)
+					printf("_%X", can.cc.len8_dlc);
 			}
-			if (can.fd.can_id & CAN_RTR_FLAG)
-				printf("remote request");
 			printf("\n");
 			fflush(stdout);
 		}
