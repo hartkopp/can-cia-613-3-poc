@@ -21,13 +21,18 @@
 
 #include "printxlframe.h"
 
+#define ANYDEV "any"
+
 extern int optind, opterr, optopt;
 
 void print_usage(char *prg)
 {
 	fprintf(stderr, "%s - CAN XL frame receiver\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <CAN interface>\n", prg);
+	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "         -P (check data pattern)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "Use interface name '%s' to receive from all CAN interfaces.\n", ANYDEV);
 }
 
 int main(int argc, char **argv)
@@ -35,6 +40,8 @@ int main(int argc, char **argv)
 	int opt;
 	int s;
 	struct sockaddr_can addr;
+	struct ifreq ifr;
+	int ifindex = 0;
 	int nbytes, ret, i;
 	int sockopt = 1;
 	int check_pattern = 0;
@@ -76,15 +83,22 @@ int main(int argc, char **argv)
 		perror("socket");
 		return 1;
 	}
-	addr.can_family = AF_CAN;
-	addr.can_ifindex = if_nametoindex(argv[optind]);
 
 	ret = setsockopt(s, SOL_CAN_RAW, CAN_RAW_XL_FRAMES,
 			 &sockopt, sizeof(sockopt));
 	if (ret < 0) {
 		perror("sockopt CAN_RAW_XL_FRAMES");
-		exit(1);
+		return 1;
 	}
+
+	if (strcmp(argv[optind], ANYDEV) != 0) {
+		strcpy(ifr.ifr_name, argv[optind]);
+		ioctl(s, SIOCGIFINDEX, &ifr);
+		ifindex = ifr.ifr_ifindex;
+	}
+
+	addr.can_family = AF_CAN;
+	addr.can_ifindex = ifindex;
 
 	if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		perror("bind");
@@ -92,8 +106,10 @@ int main(int argc, char **argv)
 	}
 
 	while (1) {
+		socklen_t len = sizeof(addr);
 
-		nbytes = read(s, &can.xl, sizeof(struct canxl_frame));
+		nbytes = recvfrom(s, &can.xl, sizeof(struct canxl_frame),
+				  0, (struct sockaddr*)&addr, &len);
 		if (nbytes < 0) {
 			perror("read");
 			return 1;
@@ -103,9 +119,15 @@ int main(int argc, char **argv)
 			perror("SIOCGSTAMP");
 			return 1;
 		} else {
-			printf("(%ld.%06ld) %s ",
-			       tv.tv_sec, tv.tv_usec,
-			       argv[optind]);
+			printf("(%ld.%06ld) ", tv.tv_sec, tv.tv_usec);
+		}
+
+		ifr.ifr_ifindex = addr.can_ifindex;
+		if (ioctl(s, SIOCGIFNAME, &ifr) < 0) {
+			perror("SIOCGIFNAME");
+			return 1;
+		} else {
+			printf("%-5s ", ifr.ifr_name);
 		}
 
 		if (nbytes < CANXL_HDR_SIZE + CANXL_MIN_DLEN) {
