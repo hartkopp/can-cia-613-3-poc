@@ -42,6 +42,7 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	struct ifreq ifr;
 	int ifindex = 0;
+	int max_devname_len = 0; /* to prevent frazzled device name output */
 	int nbytes, ret, i;
 	int sockopt = 1;
 	int check_pattern = 0;
@@ -127,7 +128,9 @@ int main(int argc, char **argv)
 			perror("SIOCGIFNAME");
 			return 1;
 		} else {
-			printf("%-5s ", ifr.ifr_name);
+			if (max_devname_len < (int)strlen(ifr.ifr_name))
+				max_devname_len = strlen(ifr.ifr_name);
+			printf("%*s ", max_devname_len, ifr.ifr_name);
 		}
 
 		if (nbytes < CANXL_HDR_SIZE + CANXL_MIN_DLEN) {
