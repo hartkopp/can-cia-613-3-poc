@@ -19,7 +19,7 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-#include "printxlframe.h"
+#include "printframe.h"
 
 #define ANYDEV "any"
 
@@ -158,38 +158,18 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		if (nbytes != sizeof(struct can_frame) &&
-		    nbytes != sizeof(struct canfd_frame)) {
-			fprintf(stderr, "read: incomplete CAN(FD) frame\n");
-			return 1;
-		} else {
-			if (can.fd.can_id & CAN_EFF_FLAG)
-				printf("%08X#", can.fd.can_id & CAN_EFF_MASK);
-			else
-				printf("%03X#", can.fd.can_id & CAN_SFF_MASK);
-
-			if (nbytes == sizeof(struct canfd_frame)) {
-				printf("#%X", can.fd.flags & 0xF);
-
-				for (i = 0; i < can.fd.len; i++)
-					printf("%02X", can.fd.data[i]);
-			} else {
-				if (can.cc.can_id & CAN_RTR_FLAG) {
-					printf("R");
-					if (can.cc.len > 0)
-						printf("%d", can.cc.len);
-				} else {
-					for (i = 0; i < can.cc.len; i++)
-						printf("%02X", can.cc.data[i]);
-				}
-				if (can.cc.len == CAN_MAX_DLEN &&
-				    can.cc.len8_dlc > CAN_MAX_DLEN &&
-				    can.cc.len8_dlc <= CAN_MAX_RAW_DLC)
-					printf("_%X", can.cc.len8_dlc);
-			}
-			printf("\n");
-			fflush(stdout);
+		if (nbytes == CANFD_MTU) {
+			printfdframe(&can.fd);
+			continue;
 		}
+
+		if (nbytes == CAN_MTU) {
+			printccframe(&can.cc);
+			continue;
+		}
+
+		fprintf(stderr, "read: incomplete CAN(FD) frame\n");
+		return 1;
 	}
 
 	close(s);

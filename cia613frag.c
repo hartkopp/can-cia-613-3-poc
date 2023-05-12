@@ -20,7 +20,7 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include "cia-613-3.h"
-#include "printxlframe.h"
+#include "printframe.h"
 
 #define DEFAULT_TRANSFER_ID 0x242
 

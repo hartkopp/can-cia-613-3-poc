@@ -19,7 +19,7 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-#include "printxlframe.h"
+#include "printframe.h"
 
 #define DEFAULT_PRIO_ID 0x242
 #define DEFAULT_GAP 2
