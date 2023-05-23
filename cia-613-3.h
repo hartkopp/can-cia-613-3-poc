@@ -41,8 +41,7 @@
 struct llc_613_3 {
 	__u8 pci; /* protocol control information */
 	__u8 res; /* reserved / set to zero */
-	__u8 fcnt_hi; /* FCNT frame counter high byte */
-	__u8 fcnt_lo; /* FCNT frame counter low byte */
+	__u16 fcnt; /* FCNT frame counter (network byte order) */
 };
 
 #define LLC_613_3_SIZE (sizeof(struct llc_613_3))

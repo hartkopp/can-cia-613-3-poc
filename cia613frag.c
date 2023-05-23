@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <arpa/inet.h> /* for network byte order conversion */
 
 #include <linux/sockios.h>
 #include <linux/can.h>
@@ -42,7 +43,7 @@ int main(int argc, char **argv)
 {
 	int opt;
 	unsigned int fragsz = DEFAULT_FRAG_SIZE;
-	unsigned int fcnt = 0;
+	unsigned int txfcnt = 0;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
 
@@ -251,8 +252,7 @@ int main(int argc, char **argv)
 			}
 
 			/* set current FCNT counter into LLC information */
-			llc->fcnt_hi = (fcnt>>8) & 0xFF;
-			llc->fcnt_lo = fcnt & 0xFF;
+			llc->fcnt = htons(txfcnt & 0xFFFFU); /* byte order */
 
 			/* copy CAN XL fragmented data content */
 			if (cfsrc.len - dataptr > fragsz) {
@@ -279,8 +279,8 @@ int main(int argc, char **argv)
 			}
 
 			/* update FCNT */
-			fcnt++;
-			fcnt &= 0xFFFFU;
+			txfcnt++;
+			txfcnt &= 0xFFFFU;
 
 			if (verbose) {
 				printf("TX - ");

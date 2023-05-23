@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <arpa/inet.h> /* for network byte order conversion */
 
 #include <linux/sockios.h>
 #include <linux/can.h>
@@ -215,7 +216,7 @@ int main(int argc, char **argv)
 		}
 
 		/* common FCNT reception handling */
-		rxfcnt = (llc->fcnt_hi<<8) + llc->fcnt_lo;
+		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
 
 		if (fcnt == NO_FCNT_VALUE) {
 			/* first reception */
