@@ -26,7 +26,7 @@
 #define PCI_VH    0x08 /* version high bit */
 
 /* data link extension indicator (DLX) => SEC + AOT */
-#define PCI_SEC   0x10 /* (further) simple/extended content */
+#define PCI_SECN  0x10 /* (further) simple/extended content */
 #define PCI_AOTL  0x20 /* add-on type low bit */
 #define PCI_AOTM  0x40 /* add-on type mid bit */
 #define PCI_AOTH  0x80 /* add-on type high bit */

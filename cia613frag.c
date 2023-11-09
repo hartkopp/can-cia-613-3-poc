@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 
 		/* save original SEC bit for DLX (further SEC handling) */
 		if (cfsrc.flags & CANXL_SEC)
-			tx_pci |= PCI_SEC;
+			tx_pci |= PCI_SECN;
 
 		for (dataptr = 0; dataptr < cfsrc.len; dataptr += fragsz) {
 

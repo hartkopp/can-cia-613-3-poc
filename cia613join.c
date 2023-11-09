@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 			cfdst.flags &= ~CANXL_SEC;
 
 			/* restore original SEC bit from DLX (for other AOT) */
-			if (llc->pci & PCI_SEC)
+			if (llc->pci & PCI_SECN)
 				cfdst.flags |= CANXL_SEC;
 
 			/* 'reassembled' length without the LLC information */
