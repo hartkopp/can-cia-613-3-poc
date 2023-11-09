@@ -233,7 +233,12 @@ int main(int argc, char **argv)
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
-				printf("dropped LLC frame illegal fragment size!\n");
+				printf("FF: dropped LLC frame illegal fragment size!\n");
+				continue;
+			}
+
+			if (rxfragsz % FRAG_STEP_SIZE) {
+				printf("FF: dropped LLC frame illegal fragment step size!\n");
 				continue;
 			}
 
@@ -282,6 +287,16 @@ int main(int argc, char **argv)
 			/* update fcnt after check */
 			fcnt = rxfcnt;
 
+			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
+				printf("CF: dropped LLC frame illegal fragment size!\n");
+				continue;
+			}
+
+			if (rxfragsz % FRAG_STEP_SIZE) {
+				printf("CF: dropped LLC frame illegal fragment step size!\n");
+				continue;
+			}
+
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
 				printf("dropped CF frame size overflow!\n");
@@ -317,6 +332,11 @@ int main(int argc, char **argv)
 
 			/* update fcnt */
 			fcnt = rxfcnt;
+
+			if (rxfragsz < LF_MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
+				printf("LF: dropped LLC frame illegal fragment size!\n");
+				continue;
+			}
 
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {

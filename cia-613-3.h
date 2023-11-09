@@ -12,8 +12,10 @@
 #include <linux/types.h>
 
 #define DEFAULT_FRAG_SIZE 128
-#define MIN_FRAG_SIZE 64
+#define MIN_FRAG_SIZE 128
 #define MAX_FRAG_SIZE 1024
+#define FRAG_STEP_SIZE 128
+#define LF_MIN_FRAG_SIZE 1
 
 /* Protocol Control Information definitions: */
 

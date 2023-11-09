@@ -32,7 +32,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 sender\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <src_if> <dst_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -f <fragsize>     (fragment size "
+	fprintf(stderr, "         -f <fragsize>    (fragment size "
 		"- default: %d bytes)\n", DEFAULT_FRAG_SIZE);
 	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
@@ -65,6 +65,12 @@ int main(int argc, char **argv)
 		case 'f':
 			fragsz = strtoul(optarg, NULL, 10);
 			if (fragsz < MIN_FRAG_SIZE || fragsz > MAX_FRAG_SIZE) {
+				printf("fragment size out of range!\n");
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			if (fragsz % FRAG_STEP_SIZE) {
+				printf("illegal fragment step size!\n");
 				print_usage(basename(argv[0]));
 				return 1;
 			}
