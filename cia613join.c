@@ -197,7 +197,7 @@ int main(int argc, char **argv)
 
 		/* check for SEC bit and CiA 613-3 AOT (fragmentation) */
 		if (!((cfsrc.flags & CANXL_SEC) &&
-		      (cfsrc.len >= CANXL_MIN_DLEN + LLC_613_3_SIZE) &&
+		      (cfsrc.len >= LLC_613_3_SIZE) &&
 		      ((llc->pci & PCI_AOT_MASK) == CIA_613_3_AOT))) {
 			/* no CiA 613-3 fragment frame => just forward frame */
 

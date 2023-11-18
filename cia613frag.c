@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 
 		/* check for SEC bit and CiA 613-3 AOT (fragmentation) */
 		if ((cfsrc.flags & CANXL_SEC) &&
-		    (cfsrc.len >= CANXL_MIN_DLEN + LLC_613_3_SIZE) &&
+		    (cfsrc.len >= LLC_613_3_SIZE) &&
 		    ((srcllc->pci & PCI_AOT_MASK) == CIA_613_3_AOT)) {
 
 			/* 613-3 inside 613-3 fragmentation is not allowed */
