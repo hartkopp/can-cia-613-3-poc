@@ -51,6 +51,7 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
 	struct canxl_frame cfsrc, cfdst;
+	struct llc_613_3 *srcllc = (struct llc_613_3 *) cfsrc.data;
 	struct llc_613_3 *llc = (struct llc_613_3 *) cfdst.data;
 	unsigned int dataptr = 0;
 	__u8 tx_pci = 0;
@@ -208,6 +209,16 @@ int main(int argc, char **argv)
 			       argv[optind]);
 
 			printxlframe(&cfsrc);
+		}
+
+		/* check for SEC bit and CiA 613-3 AOT (fragmentation) */
+		if ((cfsrc.flags & CANXL_SEC) &&
+		    (cfsrc.len >= CANXL_MIN_DLEN + LLC_613_3_SIZE) &&
+		    ((srcllc->pci & PCI_AOT_MASK) == CIA_613_3_AOT)) {
+
+			/* 613-3 inside 613-3 fragmentation is not allowed */
+			printf("detected tunnel encapsulation -> frame dropped\n");
+			continue; /* wait for next frame */
 		}
 
 		/* check for unsegmented transfer (forwarding) */
