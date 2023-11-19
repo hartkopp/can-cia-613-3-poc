@@ -215,6 +215,13 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		}
 
+		if ((llc->pci & PCI_VX_MASK) != CIA_613_3_VERSION) {
+			if (verbose)
+				printf("Dropped frame due to wrong CiA 613-3 version\n");
+
+			continue; /* wait for next frame */
+		}
+
 		/* common FCNT reception handling */
 		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
 
