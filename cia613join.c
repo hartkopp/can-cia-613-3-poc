@@ -24,7 +24,7 @@
 #include "printframe.h"
 
 #define DEFAULT_TRANSFER_ID 0x242
-#define NO_FCNT_VALUE 0xFFFF0000U
+#define NO_FCNT_VALUE 0x0FFF0000U
 
 extern int optind, opterr, optopt;
 
@@ -225,14 +225,6 @@ int main(int argc, char **argv)
 		/* common FCNT reception handling */
 		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
 
-		if (fcnt == NO_FCNT_VALUE) {
-			/* first reception */
-			fcnt = rxfcnt;
-		} else if (fcnt == rxfcnt) {
-			printf("dropped frame with identical FCNT!\n");
-			continue;
-		}
-
 		/* retrieve real fragment data size from this CAN XL frame */
 		rxfragsz = cfsrc.len - LLC_613_3_SIZE;
 
@@ -286,8 +278,10 @@ int main(int argc, char **argv)
 
 			/* check that rxfcnt has increased */ 
 			if (fcnt + 1 != rxfcnt) {
-				printf("dropped CF frame wrong FCNT! (%d/%d)\n",
+				printf("CF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
+				/* only FF can set a proper fcnt value */
+				fcnt = NO_FCNT_VALUE;
 				continue;
 			}
 
@@ -332,8 +326,10 @@ int main(int argc, char **argv)
 
 			/* check that rxfcnt has increased */ 
 			if (fcnt + 1 != rxfcnt) {
-				printf("dropped LF frame wrong FCNT! (%d/%d)\n",
+				printf("LF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
+				/* only FF can set a proper fcnt value */
+				fcnt = NO_FCNT_VALUE;
 				continue;
 			}
 
@@ -372,6 +368,10 @@ int main(int argc, char **argv)
 				printxlframe(&cfdst);
 				printf("\n");
 			}
+
+			/* only FF can set a proper fcnt value */
+			fcnt = NO_FCNT_VALUE;
+
 			continue; /* wait for next frame */
 		} /* LF */
 
