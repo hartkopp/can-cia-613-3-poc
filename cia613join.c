@@ -276,17 +276,19 @@ int main(int argc, char **argv)
 		/* consecutive frame (FF/LF are unset) */
 		if ((llc->pci & PCI_XF_MASK) == 0) {
 
+			if (fcnt != NO_FCNT_VALUE) {
+				fcnt++;
+				fcnt &= 0xFFFFU;
+			}
+
 			/* check that rxfcnt has increased */ 
-			if (fcnt + 1 != rxfcnt) {
+			if (fcnt != rxfcnt) {
 				printf("CF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
 				/* only FF can set a proper fcnt value */
 				fcnt = NO_FCNT_VALUE;
 				continue;
 			}
-
-			/* update fcnt after check */
-			fcnt = rxfcnt;
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				printf("CF: dropped LLC frame illegal fragment size!\n");
@@ -324,17 +326,19 @@ int main(int argc, char **argv)
 		/* last frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_LF) {
 
+			if (fcnt != NO_FCNT_VALUE) {
+				fcnt++;
+				fcnt &= 0xFFFFU;
+			}
+
 			/* check that rxfcnt has increased */ 
-			if (fcnt + 1 != rxfcnt) {
+			if (fcnt != rxfcnt) {
 				printf("LF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
 				/* only FF can set a proper fcnt value */
 				fcnt = NO_FCNT_VALUE;
 				continue;
 			}
-
-			/* update fcnt */
-			fcnt = rxfcnt;
 
 			if (rxfragsz < LF_MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				printf("LF: dropped LLC frame illegal fragment size!\n");
