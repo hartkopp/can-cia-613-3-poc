@@ -268,8 +268,12 @@ int main(int argc, char **argv)
 				llc->pci = tx_pci; /* no FF/LF is set */
 			}
 
+			/* update FCNT */
+			txfcnt++;
+			txfcnt &= 0xFFFFU;
+
 			/* set current FCNT counter into LLC information */
-			llc->fcnt = htons(txfcnt & 0xFFFFU); /* byte order */
+			llc->fcnt = htons(txfcnt); /* network byte order */
 
 			/* copy CAN XL fragmented data content */
 			if (cfsrc.len - dataptr > fragsz) {
@@ -294,10 +298,6 @@ int main(int argc, char **argv)
 				perror("write dst canxl_frame");
 				exit(1);
 			}
-
-			/* update FCNT */
-			txfcnt++;
-			txfcnt &= 0xFFFFU;
 
 			if (verbose) {
 				printf("TX - ");
