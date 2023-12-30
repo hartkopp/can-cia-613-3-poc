@@ -36,6 +36,7 @@ void print_usage(char *prg)
 		"- default: %d bytes)\n", DEFAULT_FRAG_SIZE);
 	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
+	fprintf(stderr, "         -V <vcid>        (set virtual CAN network ID)\n");
 	fprintf(stderr, "         -v               (verbose)\n");
 }
 
@@ -45,10 +46,12 @@ int main(int argc, char **argv)
 	unsigned int fragsz = DEFAULT_FRAG_SIZE;
 	unsigned int txfcnt = 0;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
+	__u8 vcid = 0;
 	int verbose = 0;
 
 	int src, dst;
 	struct sockaddr_can addr;
+	struct can_raw_vcid_options vcid_opts = {};
 	struct can_filter rfilter;
 	struct canxl_frame cfsrc, cfdst;
 	struct llc_613_3 *srcllc = (struct llc_613_3 *) cfsrc.data;
@@ -60,7 +63,7 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "f:t:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "f:t:V:vh?")) != -1) {
 		switch (opt) {
 
 		case 'f':
@@ -80,6 +83,13 @@ int main(int argc, char **argv)
 		case 't':
 			transfer_id = strtoul(optarg, NULL, 16);
 			if (transfer_id & ~CANXL_PRIO_MASK) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			break;
+
+		case 'V':
+			if (sscanf(optarg, "%hhx", &vcid) != 1) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
@@ -165,6 +175,17 @@ int main(int argc, char **argv)
 	if (ret < 0) {
 		perror("dst sockopt CAN_RAW_XL_FRAMES");
 		exit(1);
+	}
+
+	if (vcid) {
+		vcid_opts.tx_vcid = vcid;
+		vcid_opts.flags = CAN_RAW_XL_VCID_SET_TX;
+		ret = setsockopt(dst, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
+				 &vcid_opts, sizeof(vcid_opts));
+		if (ret < 0) {
+			perror("sockopt CAN_RAW_XL_VCID_OPTS");
+			exit(1);
+		}
 	}
 
 	if (bind(dst, (struct sockaddr *)&addr, sizeof(addr)) < 0) {

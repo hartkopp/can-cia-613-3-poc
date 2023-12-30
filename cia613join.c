@@ -35,6 +35,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
+	fprintf(stderr, "         -V <vcid>:<vcid_mask> (VCID filter)\n");
 	fprintf(stderr, "         -v               (verbose)\n");
 }
 
@@ -48,6 +49,7 @@ int main(int argc, char **argv)
 	int verbose = 0;
 
 	int src, dst;
+	struct can_raw_vcid_options vcid_opts = {};
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
 	struct canxl_frame cfsrc, cfdst;
@@ -56,9 +58,10 @@ int main(int argc, char **argv)
 
 	int nbytes, ret;
 	int sockopt = 1;
+	int vcid = 0;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "t:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "t:V:vh?")) != -1) {
 		switch (opt) {
 
 		case 't':
@@ -67,6 +70,16 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
+			break;
+
+		case 'V':
+			if (sscanf(optarg, "%hhx:%hhx",
+				   &vcid_opts.rx_vcid,
+				   &vcid_opts.rx_vcid_mask) != 2) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			vcid = 1;
 			break;
 
 		case 'v':
@@ -117,6 +130,16 @@ int main(int argc, char **argv)
 	if (ret < 0) {
 		perror("src sockopt CAN_RAW_XL_FRAMES");
 		exit(1);
+	}
+
+	if (vcid) {
+		vcid_opts.flags = CAN_RAW_XL_VCID_RX_FILTER;
+		ret = setsockopt(src, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
+				 &vcid_opts, sizeof(vcid_opts));
+		if (ret < 0) {
+			perror("sockopt CAN_RAW_XL_VCID_OPTS");
+			exit(1);
+		}
 	}
 
 	/* filter only for transfer_id (= prio_id) */
