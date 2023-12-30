@@ -40,6 +40,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -p <prio_id>   (PRIO ID "
 		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
 	fprintf(stderr, "         -s             (set SEC bit)\n");
+	fprintf(stderr, "         -V <vcid>      (set virtual CAN network ID)\n");
 	fprintf(stderr, "         -P             (create data pattern)\n");
 	fprintf(stderr, "         -v             (verbose)\n");
 }
@@ -53,16 +54,18 @@ int main(int argc, char **argv)
 	canid_t prio = DEFAULT_PRIO_ID;
 	int create_pattern = 0;
 	__u8 sec_bit = 0;
+	__u8 vcid = 0;
 	int verbose = 0;
 
 	int s;
 	struct sockaddr_can addr;
+	struct can_raw_vcid_options vcid_opts = {};
 	struct timespec ts;
 	struct canxl_frame cfx = {0};
 	int nbytes, ret, dlen, i;
 	int sockopt = 1;
 
-	while ((opt = getopt(argc, argv, "l:g:p:sPvh?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:g:p:sV:Pvh?")) != -1) {
 		switch (opt) {
 
 		case 'l':
@@ -90,6 +93,13 @@ int main(int argc, char **argv)
 
 		case 's':
 			sec_bit = CANXL_SEC;
+			break;
+
+		case 'V':
+			if (sscanf(optarg, "%hhx", &vcid) != 1) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
 			break;
 
 		case 'P':
@@ -135,6 +145,17 @@ int main(int argc, char **argv)
 	if (ret < 0) {
 		perror("sockopt CAN_RAW_XL_FRAMES");
 		exit(1);
+	}
+
+	if (vcid) {
+		vcid_opts.tx_vcid = vcid;
+		vcid_opts.flags = CAN_RAW_XL_VCID_SET_TX;
+		ret = setsockopt(s, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
+				 &vcid_opts, sizeof(vcid_opts));
+		if (ret < 0) {
+			perror("sockopt CAN_RAW_XL_VCID_OPTS");
+			exit(1);
+		}
 	}
 
 	if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {

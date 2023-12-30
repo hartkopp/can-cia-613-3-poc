@@ -30,6 +30,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL frame receiver\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <CAN interface>\n", prg);
 	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "         -V <vcid>:<vcid_mask> (VCID filter)\n");
 	fprintf(stderr, "         -P (check data pattern)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Use interface name '%s' to receive from all CAN interfaces.\n", ANYDEV);
@@ -39,12 +40,14 @@ int main(int argc, char **argv)
 {
 	int opt;
 	int s;
+	struct can_raw_vcid_options vcid_opts = {};
 	struct sockaddr_can addr;
 	struct ifreq ifr;
 	int ifindex = 0;
 	int max_devname_len = 0; /* to prevent frazzled device name output */
 	int nbytes, ret, i;
 	int sockopt = 1;
+	int vcid = 0;
 	int check_pattern = 0;
 	struct timeval tv;
 	union {
@@ -53,8 +56,18 @@ int main(int argc, char **argv)
 		struct canxl_frame xl;
 	} can;
 
-	while ((opt = getopt(argc, argv, "Ph?")) != -1) {
+	while ((opt = getopt(argc, argv, "V:Ph?")) != -1) {
 		switch (opt) {
+
+		case 'V':
+			if (sscanf(optarg, "%hhx:%hhx",
+				   &vcid_opts.rx_vcid,
+				   &vcid_opts.rx_vcid_mask) != 2) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			vcid = 1;
+			break;
 
 		case 'P':
 			check_pattern = 1;
@@ -100,6 +113,16 @@ int main(int argc, char **argv)
 
 	addr.can_family = AF_CAN;
 	addr.can_ifindex = ifindex;
+
+	if (vcid) {
+		vcid_opts.flags = CAN_RAW_XL_VCID_RX_FILTER;
+		ret = setsockopt(s, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
+				 &vcid_opts, sizeof(vcid_opts));
+		if (ret < 0) {
+			perror("sockopt CAN_RAW_XL_VCID_OPTS");
+			exit(1);
+		}
+	}
 
 	if (bind(s, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		perror("bind");
