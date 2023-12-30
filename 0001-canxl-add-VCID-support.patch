@@ -1,0 +1,218 @@
+From 870c555b0e8057c0d23e18ad16a813024d387066 Mon Sep 17 00:00:00 2001
+From: Oliver Hartkopp <socketcan@hartkopp.net>
+Date: Sat, 30 Dec 2023 19:30:49 +0100
+Subject: [PATCH] canxl: add VCID support
+
+Signed-off-by: Oliver Hartkopp <socketcan@hartkopp.net>
+---
+ include/uapi/linux/can.h     | 10 ++++-
+ include/uapi/linux/can/raw.h | 13 ++++++
+ net/can/raw.c                | 78 ++++++++++++++++++++++++++++++++++--
+ 3 files changed, 96 insertions(+), 5 deletions(-)
+
+diff --git a/include/uapi/linux/can.h b/include/uapi/linux/can.h
+index 939db2388208..953df37f05e4 100644
+--- a/include/uapi/linux/can.h
++++ b/include/uapi/linux/can.h
+@@ -190,24 +190,30 @@ struct canfd_frame {
+  *
+  * Undefined bits in canxl_frame.flags are reserved and shall be set to zero.
+  */
+ #define CANXL_XLF 0x80 /* mandatory CAN XL frame flag (must always be set!) */
+ #define CANXL_SEC 0x01 /* Simple Extended Content (security/segmentation) */
++#define CANXL_VCID 0x02 /* prio contains the virtual CAN network identifier */
++
++/* the 8 bit VCID is optionally placed in the canxl_frame.prio element */
++#define CANXL_VCID_OFFSET 16 /* bit offset of VCID in prio element */
++#define CANXL_VCID_VAL_MASK 0xFFU /* VCID is a 8 bit value */
++#define CANXL_VCID_MASK (CANXL_VCID_VAL_MASK << CANXL_VCID_OFFSET)
+ 
+ /**
+  * struct canxl_frame - CAN with e'X'tended frame 'L'ength frame structure
+- * @prio:  11 bit arbitration priority with zero'ed CAN_*_FLAG flags
++ * @prio:  11 bit arbitration priority with zero'ed CAN_*_FLAG flags / VCID
+  * @flags: additional flags for CAN XL
+  * @sdt:   SDU (service data unit) type
+  * @len:   frame payload length in byte (CANXL_MIN_DLEN .. CANXL_MAX_DLEN)
+  * @af:    acceptance field
+  * @data:  CAN XL frame payload (CANXL_MIN_DLEN .. CANXL_MAX_DLEN byte)
+  *
+  * @prio shares the same position as @can_id from struct can[fd]_frame.
+  */
+ struct canxl_frame {
+-	canid_t prio;  /* 11 bit priority for arbitration (canid_t) */
++	canid_t prio;  /* 11 bit priority for arbitration / 8 bit VCID */
+ 	__u8    flags; /* additional flags for CAN XL */
+ 	__u8    sdt;   /* SDU (service data unit) type */
+ 	__u16   len;   /* frame payload length in byte */
+ 	__u32   af;    /* acceptance field */
+ 	__u8    data[CANXL_MAX_DLEN];
+diff --git a/include/uapi/linux/can/raw.h b/include/uapi/linux/can/raw.h
+index 31622c9b7988..282b9f63443a 100644
+--- a/include/uapi/linux/can/raw.h
++++ b/include/uapi/linux/can/raw.h
+@@ -63,8 +63,21 @@ enum {
+ 	CAN_RAW_LOOPBACK,	/* local loopback (default:on)       */
+ 	CAN_RAW_RECV_OWN_MSGS,	/* receive my own msgs (default:off) */
+ 	CAN_RAW_FD_FRAMES,	/* allow CAN FD frames (default:off) */
+ 	CAN_RAW_JOIN_FILTERS,	/* all filters must match to trigger */
+ 	CAN_RAW_XL_FRAMES,	/* allow CAN XL frames (default:off) */
++	CAN_RAW_XL_VCID_OPTS,	/* CAN XL VCID configuration options */
+ };
+ 
++struct can_raw_vcid_options {
++
++	__u8 flags;		/* flags for vcid (filter) behaviour */
++	__u8 tx_vcid;		/* VCID value set into canxl_frame.prio */
++	__u8 rx_vcid;		/* VCID value for VCID filter */
++	__u8 rx_vcid_mask;	/* VCID mask for VCID filter */
++
++};
++
++#define CAN_RAW_XL_VCID_SET_TX		0x01
++#define CAN_RAW_XL_VCID_RX_FILTER	0x02
++
+ #endif /* !_UAPI_CAN_RAW_H */
+diff --git a/net/can/raw.c b/net/can/raw.c
+index e6b822624ba2..f942c2938ac2 100644
+--- a/net/can/raw.c
++++ b/net/can/raw.c
+@@ -89,10 +89,14 @@ struct raw_sock {
+ 	struct list_head notifier;
+ 	int loopback;
+ 	int recv_own_msgs;
+ 	int fd_frames;
+ 	int xl_frames;
++	struct can_raw_vcid_options raw_vcid_opts;
++	canid_t tx_vcid_shifted;
++	canid_t rx_vcid_shifted;
++	canid_t rx_vcid_mask_shifted;
+ 	int join_filters;
+ 	int count;                 /* number of active filters */
+ 	struct can_filter dfilter; /* default/single filter */
+ 	struct can_filter *filter; /* pointer to filter(s) */
+ 	can_err_mask_t err_mask;
+@@ -132,14 +136,33 @@ static void raw_rcv(struct sk_buff *oskb, void *data)
+ 	/* check the received tx sock reference */
+ 	if (!ro->recv_own_msgs && oskb->sk == sk)
+ 		return;
+ 
+ 	/* make sure to not pass oversized frames to the socket */
+-	if ((!ro->fd_frames && can_is_canfd_skb(oskb)) ||
+-	    (!ro->xl_frames && can_is_canxl_skb(oskb)))
++	if (!ro->fd_frames && can_is_canfd_skb(oskb))
+ 		return;
+ 
++	if (can_is_canxl_skb(oskb)) {
++		struct canxl_frame *cxl = (struct canxl_frame *)oskb->data;
++
++		/* make sure to not pass oversized frames to the socket */
++		if (!ro->xl_frames)
++			return;
++
++		/* filter CAN XL VCID content */
++		if (ro->raw_vcid_opts.flags & CAN_RAW_XL_VCID_RX_FILTER) {
++			/* apply VCID filter if user enabled the filter */
++			if ((cxl->prio & ro->rx_vcid_mask_shifted) !=
++			    (ro->rx_vcid_shifted & ro->rx_vcid_mask_shifted))
++				return;
++		} else {
++			/* no filter => do not forward VCID tagged frames */
++			if (cxl->prio & CANXL_VCID_MASK)
++				return;
++		}
++	}
++
+ 	/* eliminate multiple filter matches for the same skb */
+ 	if (this_cpu_ptr(ro->uniq)->skb == oskb &&
+ 	    this_cpu_ptr(ro->uniq)->skbcnt == can_skb_prv(oskb)->skbcnt) {
+ 		if (!ro->join_filters)
+ 			return;
+@@ -696,10 +719,26 @@ static int raw_setsockopt(struct socket *sock, int level, int optname,
+ 		/* Enabling CAN XL includes CAN FD */
+ 		if (ro->xl_frames)
+ 			ro->fd_frames = ro->xl_frames;
+ 		break;
+ 
++	case CAN_RAW_XL_VCID_OPTS:
++		if (optlen != sizeof(ro->raw_vcid_opts))
++			return -EINVAL;
++
++		if (copy_from_sockptr(&ro->raw_vcid_opts, optval, optlen))
++			return -EFAULT;
++
++		/* prepare 32 bit values for handling in hot path */
++		ro->tx_vcid_shifted = \
++			ro->raw_vcid_opts.tx_vcid << CANXL_VCID_OFFSET;
++		ro->rx_vcid_shifted = \
++			ro->raw_vcid_opts.rx_vcid << CANXL_VCID_OFFSET;
++		ro->rx_vcid_mask_shifted = \
++			ro->raw_vcid_opts.rx_vcid_mask << CANXL_VCID_OFFSET;
++		break;
++
+ 	case CAN_RAW_JOIN_FILTERS:
+ 		if (optlen != sizeof(ro->join_filters))
+ 			return -EINVAL;
+ 
+ 		if (copy_from_sockptr(&ro->join_filters, optval, optlen))
+@@ -784,10 +823,25 @@ static int raw_getsockopt(struct socket *sock, int level, int optname,
+ 		if (len > sizeof(int))
+ 			len = sizeof(int);
+ 		val = &ro->xl_frames;
+ 		break;
+ 
++	case CAN_RAW_XL_VCID_OPTS:
++		/* user space buffer to small for VCID opts? */
++		if (len < sizeof(ro->raw_vcid_opts)) {
++			/* return -ERANGE and needed space in optlen */
++			err = -ERANGE;
++			if (put_user(sizeof(ro->raw_vcid_opts), optlen))
++				err = -EFAULT;
++		} else {
++			if (len > sizeof(ro->raw_vcid_opts))
++				len = sizeof(ro->raw_vcid_opts);
++			if (copy_to_user(optval, &ro->raw_vcid_opts, len))
++				err = -EFAULT;
++		}
++		break;
++
+ 	case CAN_RAW_JOIN_FILTERS:
+ 		if (len > sizeof(int))
+ 			len = sizeof(int);
+ 		val = &ro->join_filters;
+ 		break;
+@@ -814,12 +868,30 @@ static bool raw_bad_txframe(struct raw_sock *ro, struct sk_buff *skb, int mtu)
+ 	    (mtu == CANFD_MTU || can_is_canxl_dev_mtu(mtu)))
+ 		return false;
+ 
+ 	/* CAN XL -> needs to be enabled and a CAN XL device */
+ 	if (ro->xl_frames && can_is_canxl_skb(skb) &&
+-	    can_is_canxl_dev_mtu(mtu))
++	    can_is_canxl_dev_mtu(mtu)) {
++		struct canxl_frame *cxl = (struct canxl_frame *)skb->data;
++
++		/* sanitize non CAN XL bits */
++		cxl->prio &= (CANXL_PRIO_MASK | CANXL_VCID_MASK);
++
++		/* set VCID in CAN XL frame if enabled */
++		if (ro->raw_vcid_opts.flags & CAN_RAW_XL_VCID_SET_TX) {
++			cxl->prio &= CANXL_PRIO_MASK;
++			cxl->prio |= ro->tx_vcid_shifted;
++		}
++
++		/* set flag only for 'tagged' VCID values */
++		if (cxl->prio & CANXL_VCID_MASK)
++			cxl->flags |= CANXL_VCID;
++		else
++			cxl->flags &= ~CANXL_VCID;
++
+ 		return false;
++	}
+ 
+ 	return true;
+ }
+ 
+ static int raw_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
+-- 
+2.34.1
+
