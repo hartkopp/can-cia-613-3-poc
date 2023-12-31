@@ -1,4 +1,4 @@
-From 870c555b0e8057c0d23e18ad16a813024d387066 Mon Sep 17 00:00:00 2001
+From f62552b786939e3559748e213f1931e17ff71504 Mon Sep 17 00:00:00 2001
 From: Oliver Hartkopp <socketcan@hartkopp.net>
 Date: Sat, 30 Dec 2023 19:30:49 +0100
 Subject: [PATCH] canxl: add VCID support
@@ -6,9 +6,9 @@ Subject: [PATCH] canxl: add VCID support
 Signed-off-by: Oliver Hartkopp <socketcan@hartkopp.net>
 ---
  include/uapi/linux/can.h     | 10 ++++-
- include/uapi/linux/can/raw.h | 13 ++++++
- net/can/raw.c                | 78 ++++++++++++++++++++++++++++++++++--
- 3 files changed, 96 insertions(+), 5 deletions(-)
+ include/uapi/linux/can/raw.h | 14 ++++++
+ net/can/raw.c                | 82 ++++++++++++++++++++++++++++++++++--
+ 3 files changed, 101 insertions(+), 5 deletions(-)
 
 diff --git a/include/uapi/linux/can.h b/include/uapi/linux/can.h
 index 939db2388208..953df37f05e4 100644
@@ -48,10 +48,10 @@ index 939db2388208..953df37f05e4 100644
  	__u32   af;    /* acceptance field */
  	__u8    data[CANXL_MAX_DLEN];
 diff --git a/include/uapi/linux/can/raw.h b/include/uapi/linux/can/raw.h
-index 31622c9b7988..282b9f63443a 100644
+index 31622c9b7988..8890b0d2fd48 100644
 --- a/include/uapi/linux/can/raw.h
 +++ b/include/uapi/linux/can/raw.h
-@@ -63,8 +63,21 @@ enum {
+@@ -63,8 +63,22 @@ enum {
  	CAN_RAW_LOOPBACK,	/* local loopback (default:on)       */
  	CAN_RAW_RECV_OWN_MSGS,	/* receive my own msgs (default:off) */
  	CAN_RAW_FD_FRAMES,	/* allow CAN FD frames (default:off) */
@@ -69,12 +69,13 @@ index 31622c9b7988..282b9f63443a 100644
 +
 +};
 +
-+#define CAN_RAW_XL_VCID_SET_TX		0x01
-+#define CAN_RAW_XL_VCID_RX_FILTER	0x02
++#define CAN_RAW_XL_VCID_TX_SET		0x01
++#define CAN_RAW_XL_VCID_TX_PASS		0x02
++#define CAN_RAW_XL_VCID_RX_FILTER	0x04
 +
  #endif /* !_UAPI_CAN_RAW_H */
 diff --git a/net/can/raw.c b/net/can/raw.c
-index e6b822624ba2..f942c2938ac2 100644
+index e6b822624ba2..99c1eec96983 100644
 --- a/net/can/raw.c
 +++ b/net/can/raw.c
 @@ -89,10 +89,14 @@ struct raw_sock {
@@ -181,7 +182,7 @@ index e6b822624ba2..f942c2938ac2 100644
  			len = sizeof(int);
  		val = &ro->join_filters;
  		break;
-@@ -814,12 +868,30 @@ static bool raw_bad_txframe(struct raw_sock *ro, struct sk_buff *skb, int mtu)
+@@ -814,12 +868,34 @@ static bool raw_bad_txframe(struct raw_sock *ro, struct sk_buff *skb, int mtu)
  	    (mtu == CANFD_MTU || can_is_canxl_dev_mtu(mtu)))
  		return false;
  
@@ -194,8 +195,12 @@ index e6b822624ba2..f942c2938ac2 100644
 +		/* sanitize non CAN XL bits */
 +		cxl->prio &= (CANXL_PRIO_MASK | CANXL_VCID_MASK);
 +
++		/* clear VCID in CAN XL frame if pass through is disabled */
++		if (!(ro->raw_vcid_opts.flags & CAN_RAW_XL_VCID_TX_PASS))
++			cxl->prio &= CANXL_PRIO_MASK;
++
 +		/* set VCID in CAN XL frame if enabled */
-+		if (ro->raw_vcid_opts.flags & CAN_RAW_XL_VCID_SET_TX) {
++		if (ro->raw_vcid_opts.flags & CAN_RAW_XL_VCID_TX_SET) {
 +			cxl->prio &= CANXL_PRIO_MASK;
 +			cxl->prio |= ro->tx_vcid_shifted;
 +		}

@@ -179,7 +179,7 @@ int main(int argc, char **argv)
 
 	if (vcid) {
 		vcid_opts.tx_vcid = vcid;
-		vcid_opts.flags = CAN_RAW_XL_VCID_SET_TX;
+		vcid_opts.flags = CAN_RAW_XL_VCID_TX_SET;
 		ret = setsockopt(dst, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
 				 &vcid_opts, sizeof(vcid_opts));
 		if (ret < 0) {
