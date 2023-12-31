@@ -41,6 +41,7 @@ void print_usage(char *prg)
 		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
 	fprintf(stderr, "         -s             (set SEC bit)\n");
 	fprintf(stderr, "         -V <vcid>      (set virtual CAN network ID)\n");
+	fprintf(stderr, "         -W <vcid>      (pass virtual CAN network ID)\n");
 	fprintf(stderr, "         -P             (create data pattern)\n");
 	fprintf(stderr, "         -v             (verbose)\n");
 }
@@ -55,6 +56,7 @@ int main(int argc, char **argv)
 	int create_pattern = 0;
 	__u8 sec_bit = 0;
 	__u8 vcid = 0;
+	__u8 vcid_pass = 0;
 	int verbose = 0;
 
 	int s;
@@ -65,7 +67,7 @@ int main(int argc, char **argv)
 	int nbytes, ret, dlen, i;
 	int sockopt = 1;
 
-	while ((opt = getopt(argc, argv, "l:g:p:sV:Pvh?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:g:p:sV:W:Pvh?")) != -1) {
 		switch (opt) {
 
 		case 'l':
@@ -97,6 +99,13 @@ int main(int argc, char **argv)
 
 		case 'V':
 			if (sscanf(optarg, "%hhx", &vcid) != 1) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			break;
+
+		case 'W':
+			if (sscanf(optarg, "%hhx", &vcid_pass) != 1) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
@@ -148,8 +157,15 @@ int main(int argc, char **argv)
 	}
 
 	if (vcid) {
+		/* this value potentially overwrites the vcid_pass content */
 		vcid_opts.tx_vcid = vcid;
-		vcid_opts.flags = CAN_RAW_XL_VCID_TX_SET;
+		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_SET;
+	}
+
+	if (vcid_pass)
+		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_PASS;
+
+	if (vcid || vcid_pass) {
 		ret = setsockopt(s, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
 				 &vcid_opts, sizeof(vcid_opts));
 		if (ret < 0) {
@@ -167,6 +183,9 @@ int main(int argc, char **argv)
 	cfx.flags = (CANXL_XLF | sec_bit);
 	cfx.sdt = 0;
 	cfx.af = 0xAFAFAFAF;
+
+	if (vcid_pass)
+		cfx.prio |= (vcid_pass << CANXL_VCID_OFFSET);
 
 	for (dlen = from; dlen <= to; dlen++) {
 		cfx.len = dlen;
