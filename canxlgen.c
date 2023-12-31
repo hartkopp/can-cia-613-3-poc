@@ -156,14 +156,25 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	cfx.prio = prio;
+	cfx.flags = (CANXL_XLF | sec_bit);
+	cfx.sdt = 0;
+	cfx.af = 0xAFAFAFAF;
+
+	if (vcid_pass) {
+		/* prepare the CAN XL frame with VCID content */
+		cfx.prio |= (vcid_pass << CANXL_VCID_OFFSET);
+		cfx.flags |= CANXL_VCID;
+
+		/* set sockopt flags for VCID pass through */
+		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_PASS;
+	}
+
 	if (vcid) {
 		/* this value potentially overwrites the vcid_pass content */
 		vcid_opts.tx_vcid = vcid;
 		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_SET;
 	}
-
-	if (vcid_pass)
-		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_PASS;
 
 	if (vcid || vcid_pass) {
 		ret = setsockopt(s, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
@@ -178,14 +189,6 @@ int main(int argc, char **argv)
 		perror("bind");
 		return 1;
 	}
-
-	cfx.prio = prio;
-	cfx.flags = (CANXL_XLF | sec_bit);
-	cfx.sdt = 0;
-	cfx.af = 0xAFAFAFAF;
-
-	if (vcid_pass)
-		cfx.prio |= (vcid_pass << CANXL_VCID_OFFSET);
 
 	for (dlen = from; dlen <= to; dlen++) {
 		cfx.len = dlen;
