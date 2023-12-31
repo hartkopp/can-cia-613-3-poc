@@ -37,6 +37,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
 	fprintf(stderr, "         -V <vcid>        (set virtual CAN network ID)\n");
+	fprintf(stderr, "         -W <vcid>        (pass virtual CAN network ID)\n");
 	fprintf(stderr, "         -v               (verbose)\n");
 }
 
@@ -47,6 +48,8 @@ int main(int argc, char **argv)
 	unsigned int txfcnt = 0;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	__u8 vcid = 0;
+	__u8 vcid_pass_val = 0;
+	int vcid_pass = 0;
 	int verbose = 0;
 
 	int src, dst;
@@ -63,7 +66,7 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "f:t:V:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "f:t:V:W:vh?")) != -1) {
 		switch (opt) {
 
 		case 'f':
@@ -93,6 +96,14 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
+			break;
+
+		case 'W':
+			if (sscanf(optarg, "%hhx", &vcid_pass_val) != 1) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			vcid_pass = 1;
 			break;
 
 		case 'v':
@@ -178,8 +189,22 @@ int main(int argc, char **argv)
 	}
 
 	if (vcid) {
+		/* this value potentially overwrites the vcid_pass content */
 		vcid_opts.tx_vcid = vcid;
-		vcid_opts.flags = CAN_RAW_XL_VCID_TX_SET;
+		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_SET;
+	}
+
+	if (vcid_pass) {
+		/* we pass the received VCID */
+		vcid_opts.flags |= CAN_RAW_XL_VCID_TX_PASS;
+
+		/* therefore we need to get the received VCID */
+		vcid_opts.flags |= CAN_RAW_XL_VCID_RX_FILTER;
+		vcid_opts.rx_vcid = vcid_pass_val;
+		vcid_opts.rx_vcid_mask = CANXL_VCID_VAL_MASK;
+	}
+
+	if (vcid || vcid_pass) {
 		ret = setsockopt(dst, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
 				 &vcid_opts, sizeof(vcid_opts));
 		if (ret < 0) {
@@ -277,6 +302,8 @@ int main(int argc, char **argv)
 			/* start of fragmentation => init header and set FF */
 			if (dataptr == 0) {
 				/* initial copy of CAN XL header w/o data */
+				/* The pass through VCID is fixed here! */
+				/* multiple VCIDs are not possible right now */
 				memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
 
 				/* set bit for segmentation in CAN XL header */
