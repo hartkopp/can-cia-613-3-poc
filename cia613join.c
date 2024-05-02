@@ -402,7 +402,9 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		} /* LF */
 
-		/* TODO: add handling for reserved FF/LF set bits here? */
+		/* invalid (reserved) FF/LF combination */
+		printf("FF/LF: dropped LLC frame with reserved FF/LF bits set!\n");
+		continue; /* wait for next frame */
 
 	} /* while(1) */
 
