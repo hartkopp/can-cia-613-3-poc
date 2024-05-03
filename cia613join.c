@@ -264,7 +264,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			/* take current rxfcnt as initial fcnt */ 
+			/* take current rxfcnt as initial fcnt */
 			fcnt = rxfcnt;
 
 			/* copy CAN XL header w/o data */
@@ -304,7 +304,7 @@ int main(int argc, char **argv)
 				fcnt &= 0xFFFFU;
 			}
 
-			/* check that rxfcnt has increased */ 
+			/* check that rxfcnt has increased */
 			if (fcnt != rxfcnt) {
 				printf("CF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
@@ -354,7 +354,7 @@ int main(int argc, char **argv)
 				fcnt &= 0xFFFFU;
 			}
 
-			/* check that rxfcnt has increased */ 
+			/* check that rxfcnt has increased */
 			if (fcnt != rxfcnt) {
 				printf("LF: abort reception wrong FCNT! (%d/%d)\n",
 				       fcnt, rxfcnt);
