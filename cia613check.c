@@ -31,8 +31,26 @@
 
 #define DEFAULT_TRANSFER_ID 0x242
 #define NO_FCNT_VALUE 0x0FFF0000U
+#define BUFMEMSZ 16 /* for 15 TIDs + invalid index */
+#define TESTDATA_PRIO_BASE 0x400
+#define TID_MASK 0x03F
 
 extern int optind, opterr, optopt;
+
+ /* 15 buffers for 64 possible TID lower bits
+  * zero -> no valid TID from plugfest testcases.
+  * Therefore index 0 of the 16 buffers is unused.
+  */
+const unsigned int tid2bufidx[] = {
+	 1,  2,  3,  0,  0,  0,  0,  4, /* 0x00 .. 0x07 */
+	 5,  6,  0,  0,  0,  0,  0,  0, /* 0x08 .. 0x0F */
+	 7,  8,  9,  0,  0,  0,  0,  0, /* 0x10 .. 0x17 */
+	 0,  0,  0,  0,  0,  0,  0,  0, /* 0x18 .. 0x1F */
+	10, 11, 12,  0,  0,  0,  0,  0, /* 0x20 .. 0x27 */
+	 0,  0,  0,  0,  0,  0,  0,  0, /* 0x28 .. 0x2F */
+	13, 14, 15,  0,  0,  0,  0,  0, /* 0x30 .. 0x37 */
+	 0,  0,  0,  0,  0,  0,  0,  0, /* 0x38 .. 0x3F */
+};
 
 void print_usage(char *prg)
 {
@@ -55,19 +73,20 @@ int main(int argc, char **argv)
 	int verbose = 0;
 
 	int can_if;
-	struct can_raw_vcid_options vcid_opts = {};
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
-	struct canxl_frame cfsrc, cfdst;
-	struct llc_613_3 *llc = (struct llc_613_3 *) cfsrc.data;
+	struct canxl_frame cf, cfdst;
+	struct canxl_frame testdata[BUFMEMSZ];
+	struct canxl_frame pdudata[BUFMEMSZ];
+	struct llc_613_3 *llc = (struct llc_613_3 *) cf.data;
+	unsigned int bufidx;
 	unsigned int dataptr = 0;
 
 	int nbytes, ret;
 	int sockopt = 1;
-	int vcid = 0;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "t:V:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "t:vh?")) != -1) {
 		switch (opt) {
 
 		case 't':
@@ -76,16 +95,6 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
-			break;
-
-		case 'V':
-			if (sscanf(optarg, "%hhx:%hhx",
-				   &vcid_opts.rx_vcid,
-				   &vcid_opts.rx_vcid_mask) != 2) {
-				print_usage(basename(argv[0]));
-				return 1;
-			}
-			vcid = 1;
 			break;
 
 		case 'v':
@@ -122,6 +131,10 @@ int main(int argc, char **argv)
 	}
 	addr.can_family = AF_CAN;
 	addr.can_ifindex = if_nametoindex(argv[optind]);
+	if (addr.can_ifindex <= 0) {
+		perror("can_if");
+		exit(1);
+	}
 
 	/* enable CAN XL frames */
 	ret = setsockopt(can_if, SOL_CAN_RAW, CAN_RAW_XL_FRAMES,
@@ -131,19 +144,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (vcid) {
-		vcid_opts.flags = CAN_RAW_XL_VCID_RX_FILTER;
-		ret = setsockopt(can_if, SOL_CAN_RAW, CAN_RAW_XL_VCID_OPTS,
-				 &vcid_opts, sizeof(vcid_opts));
-		if (ret < 0) {
-			perror("sockopt CAN_RAW_XL_VCID_OPTS");
-			exit(1);
-		}
-	}
-
-	/* filter only for transfer_id (= prio_id) */
-	rfilter.can_id = transfer_id;
-	rfilter.can_mask = CAN_EFF_FLAG | CAN_RTR_FLAG | CAN_SFF_MASK;
+	/* filter prio for 0x000 - 0x03F and 0x400 - 0x43F */
+	rfilter.can_id = 0;
+	rfilter.can_mask = (CAN_EFF_FLAG | CAN_RTR_FLAG | CANXL_PRIO_MASK) - TESTDATA_PRIO_BASE - TID_MASK;
 	ret = setsockopt(can_if, SOL_CAN_RAW, CAN_RAW_FILTER,
 			 &rfilter, sizeof(rfilter));
 	if (ret < 0) {
@@ -160,7 +163,7 @@ int main(int argc, char **argv)
 	while (1) {
 
 		/* read fragmented CAN XL source frame */
-		nbytes = read(can_if, &cfsrc, sizeof(struct canxl_frame));
+		nbytes = read(can_if, &cf, sizeof(struct canxl_frame));
 		if (nbytes < 0) {
 			perror("read");
 			return 1;
@@ -171,15 +174,15 @@ int main(int argc, char **argv)
 			return 1;
 		}
 
-		if (!(cfsrc.flags & CANXL_XLF)) {
+		if (!(cf.flags & CANXL_XLF)) {
 			fprintf(stderr, "read: no CAN XL frame flag\n");
-			return 1;
+			continue;
 		}
 
-		if (nbytes != CANXL_HDR_SIZE + cfsrc.len) {
+		if (nbytes != CANXL_HDR_SIZE + cf.len) {
 			printf("nbytes = %d\n", nbytes);
 			fprintf(stderr, "read: no CAN XL frame len\n");
-			return 1;
+			continue;
 		}
 
 		if (verbose) {
@@ -192,12 +195,25 @@ int main(int argc, char **argv)
 			printf("(%ld.%06ld) %s ", tv.tv_sec, tv.tv_usec,
 			       argv[optind]);
 
-			printxlframe(&cfsrc);
+			printxlframe(&cf);
+		}
+
+		/* get buffer index based on received prio */
+		bufidx = tid2bufidx[cf.prio & TID_MASK];
+
+		/* is this a test data prio id ? */
+		if (cf.prio & TESTDATA_PRIO_BASE) {
+			testdata[bufidx] = cf;
+			if (verbose) {
+				printf("TD - ");
+				printxlframe(&cf);
+			}
+			continue; /* wait for next frame */
 		}
 
 		/* check for SEC bit and CiA 613-3 AOT (fragmentation) */
-		if (!((cfsrc.flags & CANXL_SEC) &&
-		      (cfsrc.len >= LLC_613_3_SIZE) &&
+		if (!((cf.flags & CANXL_SEC) &&
+		      (cf.len >= LLC_613_3_SIZE) &&
 		      ((llc->pci & PCI_AOT_MASK) == CIA_613_3_AOT))) {
 			/* no CiA 613-3 fragment frame => just forward frame */
 
@@ -205,7 +221,7 @@ int main(int argc, char **argv)
 
 			if (verbose) {
 				printf("FW - ");
-				printxlframe(&cfsrc);
+				printxlframe(&cf);
 			}
 			continue; /* wait for next frame */
 		}
@@ -221,7 +237,7 @@ int main(int argc, char **argv)
 		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
 
 		/* retrieve real fragment data size from this CAN XL frame */
-		rxfragsz = cfsrc.len - LLC_613_3_SIZE;
+		rxfragsz = cf.len - LLC_613_3_SIZE;
 
 		/* check for first frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
@@ -240,7 +256,7 @@ int main(int argc, char **argv)
 			fcnt = rxfcnt;
 
 			/* copy CAN XL header w/o data */
-			memcpy(&cfdst, &cfsrc, CANXL_HDR_SIZE);
+			memcpy(&cfdst, &cf, CANXL_HDR_SIZE);
 
 			/* clear SEC bit from our segmentation process */
 			cfdst.flags &= ~CANXL_SEC;
@@ -254,7 +270,7 @@ int main(int argc, char **argv)
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[0],
-			       &cfsrc.data[LLC_613_3_SIZE],
+			       &cf.data[LLC_613_3_SIZE],
 			       cfdst.len);
 
 			/* update data pointer for next fragment data */
@@ -303,7 +319,7 @@ int main(int argc, char **argv)
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[dataptr],
-			       &cfsrc.data[LLC_613_3_SIZE],
+			       &cf.data[LLC_613_3_SIZE],
 			       rxfragsz);
 
 			/* update data pointer and len for next fragment data */
@@ -348,7 +364,7 @@ int main(int argc, char **argv)
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&cfdst.data[dataptr],
-			       &cfsrc.data[LLC_613_3_SIZE],
+			       &cf.data[LLC_613_3_SIZE],
 			       rxfragsz);
 
 			/* update length value with last frame content size */
