@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * llc-gw-tx.c - CAN XL CiA 613-3 sender
+ * cia613frag.c - CAN XL CiA 613-3 gateway (fragmentation)
  *
  */
 
@@ -29,7 +29,7 @@ extern int optind, opterr, optopt;
 
 void print_usage(char *prg)
 {
-	fprintf(stderr, "%s - CAN XL CiA 613-3 sender\n\n", prg);
+	fprintf(stderr, "%s - CAN XL CiA 613-3 gateway (fragmentation)\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <src_if> <dst_if>\n", prg);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "         -f <fragsize>    (fragment size "

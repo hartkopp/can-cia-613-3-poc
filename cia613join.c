@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * llc-gw-rx.c - CAN XL CiA 613-3 receiver
+ * cia613join.c - CAN XL CiA 613-3 gateway (join/defragmentation)
  *
  */
 
@@ -30,13 +30,13 @@ extern int optind, opterr, optopt;
 
 void print_usage(char *prg)
 {
-	fprintf(stderr, "%s - CAN XL CiA 613-3 receiver\n\n", prg);
+	fprintf(stderr, "%s - CAN XL CiA 613-3 gateway (join/defragmentation)\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <src_if> <dst_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -t <transfer_id> (TRANSFER ID "
+	fprintf(stderr, "         -t <transfer_id>      (TRANSFER ID "
 		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
 	fprintf(stderr, "         -V <vcid>:<vcid_mask> (VCID filter)\n");
-	fprintf(stderr, "         -v               (verbose)\n");
+	fprintf(stderr, "         -v                    (verbose)\n");
 }
 
 int main(int argc, char **argv)
