@@ -8,16 +8,14 @@ static inline void printxlframe(struct canxl_frame *cfx)
 	int i;
 
 	/* print prio and CAN XL header content */
-	if ((cfx->flags & CANXL_VCID) && (cfx->prio & CANXL_VCID_MASK))
-		printf("%06X", cfx->prio & (CANXL_VCID_MASK | CANXL_PRIO_MASK));
-	else
-		printf("%03X", cfx->prio & CANXL_PRIO_MASK);
-
-	printf("###%02X.%02X.%08X", cfx->flags, cfx->sdt, cfx->af);
+	printf("%02X%03X#%02X:%02X:%08X#",
+	       (canid_t)(cfx->prio & CANXL_VCID_MASK) >> CANXL_VCID_OFFSET,
+	       (canid_t)(cfx->prio & CANXL_PRIO_MASK),
+	       cfx->flags, cfx->sdt, cfx->af);
 
 	/* print up to 12 data bytes */
 	for (i = 0; i < cfx->len && i < 12; i++) {
-		if (!(i%4))
+		if (!(i%4) && i)
 			printf(".");
 		printf("%02X", cfx->data[i]);
 	}
