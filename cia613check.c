@@ -200,6 +200,8 @@ int main(int argc, char **argv)
 
 		/* get buffer index based on received prio */
 		bufidx = tid2bufidx[cf.prio & TID_MASK];
+		if (!bufidx)
+			continue;
 
 		/* is this a test data prio id ? */
 		if (cf.prio & TESTDATA_PRIO_BASE) {
