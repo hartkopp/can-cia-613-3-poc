@@ -15,6 +15,7 @@ CPPFLAGS += \
 PROGRAMS := \
 	canxlgen \
 	canxlrcv \
+	cia613check \
 	cia613frag \
 	cia613join
 
