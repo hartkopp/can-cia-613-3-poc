@@ -29,7 +29,7 @@
 #include "cia-613-3.h"
 #include "printframe.h"
 
-#define DEFAULT_TRANSFER_ID 0x242
+#define DEFAULT_BUFFERS 3
 #define NO_FCNT_VALUE 0x0FFF0000U
 #define BUFMEMSZ 16 /* for 15 TIDs + invalid index */
 #define TESTDATA_PRIO_BASE 0x400
@@ -57,10 +57,8 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 protocol checker\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <canxl_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -t <transfer_id>      (TRANSFER ID "
-		"- default: 0x%03X)\n", DEFAULT_TRANSFER_ID);
-	fprintf(stderr, "         -V <vcid>:<vcid_mask> (VCID filter)\n");
-	fprintf(stderr, "         -v                    (verbose)\n");
+	fprintf(stderr, "         -b <buffers> (default: %d)\n", DEFAULT_BUFFERS);
+	fprintf(stderr, "         -v           (verbose)\n");
 }
 
 int main(int argc, char **argv)
@@ -69,7 +67,7 @@ int main(int argc, char **argv)
 	unsigned int rxfragsz;
 	unsigned int fcnt[BUFMEMSZ]; /* init when testdata is received */
 	unsigned int rxfcnt;
-	canid_t transfer_id = DEFAULT_TRANSFER_ID;
+	unsigned int buffers = DEFAULT_BUFFERS;
 	int verbose = 0;
 
 	int can_if;
@@ -86,12 +84,12 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	while ((opt = getopt(argc, argv, "t:vh?")) != -1) {
+	while ((opt = getopt(argc, argv, "b:vh?")) != -1) {
 		switch (opt) {
 
-		case 't':
-			transfer_id = strtoul(optarg, NULL, 16);
-			if (transfer_id & ~CANXL_PRIO_MASK) {
+		case 'b':
+			buffers = strtoul(optarg, NULL, 10);
+			if (buffers > BUFMEMSZ -1) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
