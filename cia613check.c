@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 {
 	int opt;
 	unsigned int rxfragsz;
-	unsigned int fcnt = NO_FCNT_VALUE;
+	unsigned int fcnt[BUFMEMSZ]; /* init when testdata is received */
 	unsigned int rxfcnt;
 	canid_t transfer_id = DEFAULT_TRANSFER_ID;
 	int verbose = 0;
@@ -75,12 +75,12 @@ int main(int argc, char **argv)
 	int can_if;
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
-	struct canxl_frame cf, cfdst;
+	struct canxl_frame cf;
 	struct canxl_frame testdata[BUFMEMSZ] = {0};
 	struct canxl_frame pdudata[BUFMEMSZ] = {0};
 	struct llc_613_3 *llc = (struct llc_613_3 *) cf.data;
 	unsigned int bufidx;
-	unsigned int dataptr = 0;
+	unsigned int dataptr[BUFMEMSZ] = {0};
 
 	int nbytes, ret;
 	int sockopt = 1;
@@ -206,6 +206,7 @@ int main(int argc, char **argv)
 		/* is this a test data prio id ? */
 		if (cf.prio & TESTDATA_PRIO_BASE) {
 			testdata[bufidx] = cf;
+			fcnt[bufidx] = NO_FCNT_VALUE;
 			if (verbose) {
 				printf("TD - ");
 				printxlframe(&cf);
@@ -265,32 +266,32 @@ int main(int argc, char **argv)
 			}
 
 			/* take current rxfcnt as initial fcnt */
-			fcnt = rxfcnt;
+			fcnt[bufidx] = rxfcnt;
 
 			/* copy CAN XL header w/o data */
-			memcpy(&cfdst, &cf, CANXL_HDR_SIZE);
+			memcpy(&pdudata[bufidx], &cf, CANXL_HDR_SIZE);
 
 			/* clear SEC bit from our segmentation process */
-			cfdst.flags &= ~CANXL_SEC;
+			pdudata[bufidx].flags &= ~CANXL_SEC;
 
 			/* restore original SEC bit from DLX (for other AOT) */
 			if (llc->pci & PCI_SECN)
-				cfdst.flags |= CANXL_SEC;
+				pdudata[bufidx].flags |= CANXL_SEC;
 
 			/* 'reassembled' length without the LLC information */
-			cfdst.len = rxfragsz;
+			pdudata[bufidx].len = rxfragsz;
 
 			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[0],
+			memcpy(&pdudata[bufidx].data[0],
 			       &cf.data[LLC_613_3_SIZE],
-			       cfdst.len);
+			       pdudata[bufidx].len);
 
 			/* update data pointer for next fragment data */
-			dataptr = cfdst.len;
+			dataptr[bufidx] = pdudata[bufidx].len;
 
 			if (0) {
 				printf("TX - ");
-				printxlframe(&cfdst);
+				printxlframe(&pdudata[bufidx]);
 				printf("\n");
 			}
 			continue; /* wait for next frame */
@@ -299,17 +300,17 @@ int main(int argc, char **argv)
 		/* consecutive frame (FF/LF are unset) */
 		if ((llc->pci & PCI_XF_MASK) == 0) {
 
-			if (fcnt != NO_FCNT_VALUE) {
-				fcnt++;
-				fcnt &= 0xFFFFU;
+			if (fcnt[bufidx] != NO_FCNT_VALUE) {
+				fcnt[bufidx]++;
+				fcnt[bufidx] &= 0xFFFFU;
 			}
 
 			/* check that rxfcnt has increased */
-			if (fcnt != rxfcnt) {
+			if (fcnt[bufidx] != rxfcnt) {
 				printf("CF: abort reception wrong FCNT! (%d/%d)\n",
-				       fcnt, rxfcnt);
+				       fcnt[bufidx], rxfcnt);
 				/* only FF can set a proper fcnt value */
-				fcnt = NO_FCNT_VALUE;
+				fcnt[bufidx] = NO_FCNT_VALUE;
 				continue;
 			}
 
@@ -324,23 +325,23 @@ int main(int argc, char **argv)
 			}
 
 			/* make sure the data fits into the unfragmented frame */
-			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
+			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
 				printf("dropped CF frame size overflow!\n");
 				continue;
 			}
 
 			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[dataptr],
+			memcpy(&pdudata[bufidx].data[dataptr[bufidx]],
 			       &cf.data[LLC_613_3_SIZE],
 			       rxfragsz);
 
 			/* update data pointer and len for next fragment data */
-			dataptr += rxfragsz;
-			cfdst.len += rxfragsz;
+			dataptr[bufidx] += rxfragsz;
+			pdudata[bufidx].len += rxfragsz;
 
 			if (0) {
 				printf("TX - ");
-				printxlframe(&cfdst);
+				printxlframe(&pdudata[bufidx]);
 				printf("\n");
 			}
 			continue; /* wait for next frame */
@@ -349,17 +350,17 @@ int main(int argc, char **argv)
 		/* last frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_LF) {
 
-			if (fcnt != NO_FCNT_VALUE) {
-				fcnt++;
-				fcnt &= 0xFFFFU;
+			if (fcnt[bufidx] != NO_FCNT_VALUE) {
+				fcnt[bufidx]++;
+				fcnt[bufidx] &= 0xFFFFU;
 			}
 
 			/* check that rxfcnt has increased */
-			if (fcnt != rxfcnt) {
+			if (fcnt[bufidx] != rxfcnt) {
 				printf("LF: abort reception wrong FCNT! (%d/%d)\n",
-				       fcnt, rxfcnt);
+				       fcnt[bufidx], rxfcnt);
 				/* only FF can set a proper fcnt value */
-				fcnt = NO_FCNT_VALUE;
+				fcnt[bufidx] = NO_FCNT_VALUE;
 				continue;
 			}
 
@@ -369,18 +370,18 @@ int main(int argc, char **argv)
 			}
 
 			/* make sure the data fits into the unfragmented frame */
-			if (dataptr + rxfragsz > CANXL_MAX_DLEN) {
+			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
 				printf("dropped LF frame size overflow!\n");
 				continue;
 			}
 
 			/* copy CAN XL fragment data w/o LLC information */
-			memcpy(&cfdst.data[dataptr],
+			memcpy(&pdudata[bufidx].data[dataptr[bufidx]],
 			       &cf.data[LLC_613_3_SIZE],
 			       rxfragsz);
 
 			/* update length value with last frame content size */
-			cfdst.len += rxfragsz;
+			pdudata[bufidx].len += rxfragsz;
 
 			/* write 'reassembled' CAN XL frame */
 
@@ -388,12 +389,12 @@ int main(int argc, char **argv)
 
 			if (verbose) {
 				printf("TX - ");
-				printxlframe(&cfdst);
+				printxlframe(&pdudata[bufidx]);
 				printf("\n");
 			}
 
 			/* only FF can set a proper fcnt value */
-			fcnt = NO_FCNT_VALUE;
+			fcnt[bufidx] = NO_FCNT_VALUE;
 
 			continue; /* wait for next frame */
 		} /* LF */
