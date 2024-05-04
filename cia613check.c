@@ -76,8 +76,8 @@ int main(int argc, char **argv)
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
 	struct canxl_frame cf, cfdst;
-	struct canxl_frame testdata[BUFMEMSZ];
-	struct canxl_frame pdudata[BUFMEMSZ];
+	struct canxl_frame testdata[BUFMEMSZ] = {0};
+	struct canxl_frame pdudata[BUFMEMSZ] = {0};
 	struct llc_613_3 *llc = (struct llc_613_3 *) cf.data;
 	unsigned int bufidx;
 	unsigned int dataptr = 0;
@@ -208,6 +208,16 @@ int main(int argc, char **argv)
 			testdata[bufidx] = cf;
 			if (verbose) {
 				printf("TD - ");
+				printxlframe(&cf);
+			}
+			continue; /* wait for next frame */
+		}
+
+		/* we have a valid TID with 613-3 content */
+		if (testdata[bufidx].len == 0) {
+			/* no test data available */
+			if (verbose) {
+				printf("NT - ");
 				printxlframe(&cf);
 			}
 			continue; /* wait for next frame */
