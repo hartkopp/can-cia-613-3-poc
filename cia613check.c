@@ -64,25 +64,26 @@ void print_usage(char *prg)
 int main(int argc, char **argv)
 {
 	int opt;
-	unsigned int rxfragsz;
-	unsigned int fcnt[BUFMEMSZ]; /* init when testdata is received */
-	unsigned int rxfcnt;
-	unsigned int buffers = DEFAULT_BUFFERS;
-	int verbose = 0;
-
 	int can_if;
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
-	struct canxl_frame cf;
-	struct canxl_frame testdata[BUFMEMSZ] = {0};
-	struct canxl_frame pdudata[BUFMEMSZ] = {0};
-	struct llc_613_3 *llc = (struct llc_613_3 *) cf.data;
-	unsigned int bufidx;
-	unsigned int dataptr[BUFMEMSZ] = {0};
-
 	int nbytes, ret;
 	int sockopt = 1;
 	struct timeval tv;
+
+	unsigned int buffers = DEFAULT_BUFFERS;
+	unsigned int verbose = 0;
+
+	unsigned int rxfragsz;
+	unsigned int rxfcnt;
+	struct canxl_frame cf;
+	struct llc_613_3 *llc = (struct llc_613_3 *) cf.data;
+
+	unsigned int bufidx;
+	struct canxl_frame testdata[BUFMEMSZ] = {0};
+	struct canxl_frame pdudata[BUFMEMSZ] = {0};
+	unsigned int dataptr[BUFMEMSZ] = {0};
+	unsigned int fcnt[BUFMEMSZ]; /* init when testdata is received */
 
 	while ((opt = getopt(argc, argv, "b:vh?")) != -1) {
 		switch (opt) {
