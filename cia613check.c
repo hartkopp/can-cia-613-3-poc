@@ -264,6 +264,12 @@ int main(int argc, char **argv)
 		      ((llc->pci & PCI_AOT_MASK) == CIA_613_3_AOT))) {
 			/* no CiA 613-3 fragment frame => just forward frame */
 
+			if (pdudata[bufidx].len) {
+				nn = 0xE8;
+				printf("TID %02X - state %02X: unfragmented PDU within ongoing transfer\n", nn, tid);
+				sendstate(can_if, nn, tid);
+			}
+
 			if (!framecmp(&cf, &testdata[bufidx])) {
 				nn = 0x03;
 				printf("TID %02X - state %02X: received correct unfragmented PDU\n", nn, tid);
@@ -290,6 +296,13 @@ int main(int argc, char **argv)
 
 		/* check for first frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
+
+			if (pdudata[bufidx].len) {
+				nn = 0xE2;
+				printf("TID %02X - state %02X: FF: ongoing transfer not finished\n", nn, tid);
+				sendstate(can_if, nn, tid);
+				continue;
+			}
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				nn = 0x06;
@@ -371,7 +384,7 @@ int main(int argc, char **argv)
 
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
-				nn = 0x0B;
+				nn = 0xE9;
 				printf("TID %02X - state %02X: CF: dropped CF frame size overflow\n", nn, tid);
 				sendstate(can_if, nn, tid);
 				continue;
@@ -410,7 +423,7 @@ int main(int argc, char **argv)
 			}
 
 			if (rxfragsz < LF_MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
-				nn = 0x0C;
+				nn = 0x0B;
 				printf("TID %02X - state %02X: LF: dropped LLC frame illegal fragment size\n", nn, tid);
 				sendstate(can_if, nn, tid);
 				continue;
@@ -418,7 +431,7 @@ int main(int argc, char **argv)
 
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
-				nn = 0x0D;
+				nn = 0xE9;
 				printf("TID %02X - state %02X: LF: dropped LF frame size overflow\n", nn, tid);
 				sendstate(can_if, nn, tid);
 				continue;
@@ -433,10 +446,10 @@ int main(int argc, char **argv)
 			pdudata[bufidx].len += rxfragsz;
 
 			if (!framecmp(&pdudata[bufidx], &testdata[bufidx])) {
-				nn = 0x0E;
+				nn = 0x0C;
 				printf("TID %02X - state %02X: received correct PDU\n", nn, tid);
 			} else {
-				nn = 0x0F;
+				nn = 0x0D;
 				printf("TID %02X - state %02X: received incorrect PDU\n", nn, tid);
 			}
 			sendstate(can_if, nn, tid);
