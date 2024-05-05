@@ -22,6 +22,8 @@
 #include "printframe.h"
 
 #define DEFAULT_PRIO_ID 0x242
+#define DEFAULT_AF 0xAF1234AF
+#define DEFAULT_SDT 0x00
 #define DEFAULT_GAP 2
 #define DEFAULT_FROM 1
 #define DEFAULT_TO 2048
@@ -39,6 +41,10 @@ void print_usage(char *prg)
 		"- default: %d ms)\n", DEFAULT_GAP);
 	fprintf(stderr, "         -p <prio_id>   (PRIO ID "
 		"- default: 0x%03X)\n", DEFAULT_PRIO_ID);
+	fprintf(stderr, "         -A <af>        (AF "
+		"- default: 0x%08X)\n", DEFAULT_AF);
+	fprintf(stderr, "         -S <sdt>        (SDT "
+		"- default: 0x%02X)\n", DEFAULT_SDT);
 	fprintf(stderr, "         -s             (set SEC bit)\n");
 	fprintf(stderr, "         -V <vcid>      (set virtual CAN network ID)\n");
 	fprintf(stderr, "         -W <vcid>      (pass virtual CAN network ID)\n");
@@ -54,6 +60,8 @@ int main(int argc, char **argv)
 	unsigned int to = DEFAULT_TO;
 	canid_t prio = DEFAULT_PRIO_ID;
 	int create_pattern = 0;
+	unsigned int af = DEFAULT_AF;
+	unsigned int sdt = DEFAULT_SDT;
 	__u8 sec_bit = 0;
 	__u8 vcid = 0;
 	__u8 vcid_pass = 0;
@@ -67,7 +75,7 @@ int main(int argc, char **argv)
 	int nbytes, ret, dlen, i;
 	int sockopt = 1;
 
-	while ((opt = getopt(argc, argv, "l:g:p:sV:W:Pvh?")) != -1) {
+	while ((opt = getopt(argc, argv, "l:g:p:A:S:sV:W:Pvh?")) != -1) {
 		switch (opt) {
 
 		case 'l':
@@ -91,6 +99,15 @@ int main(int argc, char **argv)
 				print_usage(basename(argv[0]));
 				return 1;
 			}
+			break;
+
+		case 'A':
+			af = strtoul(optarg, NULL, 16);
+			break;
+
+		case 'S':
+			sdt = strtoul(optarg, NULL, 16);
+			sdt &= 0xFF;
 			break;
 
 		case 's':
@@ -158,8 +175,8 @@ int main(int argc, char **argv)
 
 	cfx.prio = prio;
 	cfx.flags = (CANXL_XLF | sec_bit);
-	cfx.sdt = 0;
-	cfx.af = 0xAFAFAFAF;
+	cfx.sdt = sdt;
+	cfx.af = af;
 
 	if (vcid_pass) {
 		/* prepare the CAN XL frame with VCID content */
