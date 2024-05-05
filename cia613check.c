@@ -432,7 +432,7 @@ int main(int argc, char **argv)
 			/* update length value with last frame content size */
 			pdudata[bufidx].len += rxfragsz;
 
-			if (!framecmp(&cf, &testdata[bufidx])) {
+			if (!framecmp(&pdudata[bufidx], &testdata[bufidx])) {
 				nn = 0x0E;
 				printf("TID %02X - state %02X: received correct PDU\n", nn, tid);
 			} else {
@@ -449,6 +449,8 @@ int main(int argc, char **argv)
 
 			/* only FF can set a proper fcnt value */
 			fcnt[bufidx] = NO_FCNT_VALUE;
+			/* mark buffer as unused */
+			pdudata[bufidx].len = 0;
 
 			continue; /* wait for next frame */
 		} /* LF */
