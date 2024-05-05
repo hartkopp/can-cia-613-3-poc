@@ -80,7 +80,7 @@ void sendstate(int can_if, unsigned int nn, unsigned int tid)
 		return;
 
 	printf("nbytes = %d\n", nbytes);
-	perror("sendstate");
+	perror("sendstate()");
 	exit(1);
 }
 
@@ -453,12 +453,6 @@ int main(int argc, char **argv)
 				printf("TID %02X - state %02X: received incorrect PDU\n", nn, tid);
 			}
 			sendstate(can_if, nn, tid);
-
-			if (verbose) {
-				printf("TX - ");
-				printxlframe(&pdudata[bufidx]);
-				printf("\n");
-			}
 
 			/* only FF can set a proper fcnt value */
 			fcnt[bufidx] = NO_FCNT_VALUE;
