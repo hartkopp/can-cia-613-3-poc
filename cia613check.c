@@ -268,6 +268,11 @@ int main(int argc, char **argv)
 				nn = 0xE8;
 				printf("TID %02X - state %02X: unfragmented PDU within ongoing transfer\n", tid, nn);
 				sendstate(can_if, nn, tid);
+
+				/* Testcase 3: terminate potential ongoing transmission */
+				fcnt[bufidx] = NO_FCNT_VALUE;
+				/* mark buffer as unused */
+				pdudata[bufidx].len = 0;
 			}
 
 			if (!framecmp(&cf, &testdata[bufidx])) {
@@ -301,7 +306,11 @@ int main(int argc, char **argv)
 				nn = 0xE2;
 				printf("TID %02X - state %02X: FF: ongoing transfer not finished\n", tid, nn);
 				sendstate(can_if, nn, tid);
-				continue;
+
+				/* Testcase 2: terminate potential ongoing transmission */
+				fcnt[bufidx] = NO_FCNT_VALUE;
+				/* mark buffer as unused */
+				pdudata[bufidx].len = 0;
 			}
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
@@ -363,6 +372,9 @@ int main(int argc, char **argv)
 				       fcnt[bufidx], rxfcnt, nn, tid);
 				sendstate(can_if, nn, tid);
 
+				/* Testcase 5: terminate potential ongoing transmission */
+				/* mark buffer as unused */
+				pdudata[bufidx].len = 0;
 				/* only FF can set a proper fcnt value */
 				fcnt[bufidx] = NO_FCNT_VALUE;
 				continue;
