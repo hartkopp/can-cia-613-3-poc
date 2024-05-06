@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 	int can_if;
 	struct sockaddr_can addr;
 	struct can_filter rfilter;
-	int nbytes, ret;
+	int i, nbytes, ret;
 	int sockopt = 1;
 	struct timeval tv;
 
@@ -296,6 +296,8 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		}
 
+		/* TODO - add lowPrioCounter handling here */
+
 		/* common FCNT reception handling */
 		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
 
@@ -304,6 +306,10 @@ int main(int argc, char **argv)
 
 		/* check for first frame */
 		if ((llc->pci & PCI_XF_MASK) == PCI_FF) {
+
+			nn = 0xE4;
+			printf("TID %02X - state %02X: FF: new TID with currently no assigned buffer\n", tid, nn);
+			sendstate(can_if, tid, nn, ubuffs);
 
 			if (pdudata[bufidx].len) {
 				nn = 0xE2;
@@ -348,7 +354,38 @@ int main(int argc, char **argv)
 			pdudata[bufidx].len = rxfragsz;
 
 			/* count buffer as used */
-			ubuffs++;
+			if (ubuffs >= maxbuffs) {
+				int highest_tid = 0;
+				int highest_tid_idx = 0;
+				/* we either grab a buffer with lower TID or ignore this FF */
+				for (i = 1; i < BUFMEMSZ; i++) {
+					if (pdudata[i].len && (pdudata[i].prio & TID_MASK > highest_tid)) {
+						highest_tid = pdudata[i].prio & TID_MASK;
+						highest_tid_idx = i;
+					}
+				}
+				if (tid > highest_tid) {
+					/* mark this buffer as unused */
+					pdudata[bufidx].len = 0;
+					/* only FF can set a proper fcnt value */
+					fcnt[bufidx] = NO_FCNT_VALUE;
+					nn = 0xE6;
+					printf("TID %02X - state %02X: FF: dropped LLC frame (buffer full/low prio)\n", tid, nn);
+					sendstate(can_if, tid, nn, ubuffs);
+					continue;
+				} else {
+					/* mark grabbed buffer as unused */
+					pdudata[highest_tid_idx].len = 0;
+					/* only FF can set a proper fcnt value */
+					fcnt[highest_tid_idx] = NO_FCNT_VALUE;
+					nn = 0xE5;
+					printf("TID %02X - state %02X: FF: grabbed buffer from TID %02X\n", tid, nn, highest_tid);
+					sendstate(can_if, highest_tid, nn, ubuffs);
+				}
+			} else {
+				/* no problem to allocate a new buffer */
+				ubuffs++;
+			}
 
 			/* copy CAN XL fragment data w/o LLC information */
 			memcpy(&pdudata[bufidx].data[0],
