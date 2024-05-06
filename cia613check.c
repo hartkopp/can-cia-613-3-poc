@@ -29,7 +29,7 @@
 #include "cia-613-3.h"
 #include "printframe.h"
 
-#define DEFAULT_BUFFERS 3
+#define DEFAULT_MAXBUFFS 3
 #define NO_FCNT_VALUE 0x0FFF0000U
 #define BUFMEMSZ 16 /* for 15 TIDs + invalid index */
 #define TESTDATA_PRIO_BASE 0x400
@@ -58,8 +58,8 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 protocol checker\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <canxl_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -b <buffers> (default: %d)\n", DEFAULT_BUFFERS);
-	fprintf(stderr, "         -v           (verbose)\n");
+	fprintf(stderr, "         -b <maxbuffs> (default: %d)\n", DEFAULT_MAXBUFFS);
+	fprintf(stderr, "         -v            (verbose)\n");
 }
 
 void sendstate(int can_if, unsigned int tid, unsigned int nn, unsigned int ubuffs)
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 	int sockopt = 1;
 	struct timeval tv;
 
-	unsigned int buffers = DEFAULT_BUFFERS;
+	unsigned int maxbuffs = DEFAULT_MAXBUFFS;
 	unsigned int ubuffs = 0;
 	unsigned int verbose = 0;
 
@@ -124,8 +124,8 @@ int main(int argc, char **argv)
 		switch (opt) {
 
 		case 'b':
-			buffers = strtoul(optarg, NULL, 10);
-			if ((buffers > BUFMEMSZ - 1) || (buffers < 1)) {
+			maxbuffs = strtoul(optarg, NULL, 10);
+			if ((maxbuffs > BUFMEMSZ - 1) || (maxbuffs < 1)) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
