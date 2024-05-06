@@ -30,11 +30,13 @@
 #include "printframe.h"
 
 #define DEFAULT_MAXBUFFS 3
+#define DEFAULT_MAXLPCNT 2
 #define NO_FCNT_VALUE 0x0FFF0000U
 #define BUFMEMSZ 16 /* for 15 TIDs + invalid index */
 #define TESTDATA_PRIO_BASE 0x400
 #define DEBUG_ID_PRIO_BASE 0x200 /* Bosch 0x100, VW 0x200, Vector 0x300 */
 #define TID_MASK 0x03F
+#define TID_MAX 0x03F
 
 extern int optind, opterr, optopt;
 
@@ -58,8 +60,9 @@ void print_usage(char *prg)
 	fprintf(stderr, "%s - CAN XL CiA 613-3 protocol checker\n\n", prg);
 	fprintf(stderr, "Usage: %s [options] <canxl_if>\n", prg);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "         -b <maxbuffs> (default: %d)\n", DEFAULT_MAXBUFFS);
-	fprintf(stderr, "         -v            (verbose)\n");
+	fprintf(stderr, "         -b <maxbuffs>        (default: %d)\n", DEFAULT_MAXBUFFS);
+	fprintf(stderr, "         -l <maxLowPrioCount> (default: %d)\n", DEFAULT_MAXLPCNT);
+	fprintf(stderr, "         -v                   (verbose)\n");
 }
 
 void sendstate(int can_if, unsigned int tid, unsigned int nn, unsigned int ubuffs)
@@ -104,6 +107,8 @@ int main(int argc, char **argv)
 	struct timeval tv;
 
 	unsigned int maxbuffs = DEFAULT_MAXBUFFS;
+	unsigned int maxlpcnt = DEFAULT_MAXLPCNT;
+	unsigned int lpcnt = 0;
 	unsigned int ubuffs = 0;
 	unsigned int verbose = 0;
 
@@ -120,12 +125,26 @@ int main(int argc, char **argv)
 	unsigned int dataptr[BUFMEMSZ] = {0};
 	unsigned int fcnt[BUFMEMSZ]; /* init when testdata is received */
 
-	while ((opt = getopt(argc, argv, "b:vh?")) != -1) {
+	/* to search TIDs in pdudata buffer memory */
+	int highest_tid;
+	int highest_tid_idx;
+	int lowest_tid;
+	int lowest_tid_idx;
+
+	while ((opt = getopt(argc, argv, "b:l:vh?")) != -1) {
 		switch (opt) {
 
 		case 'b':
 			maxbuffs = strtoul(optarg, NULL, 10);
 			if ((maxbuffs > BUFMEMSZ - 1) || (maxbuffs < 1)) {
+				print_usage(basename(argv[0]));
+				return 1;
+			}
+			break;
+
+		case 'l':
+			maxlpcnt = strtoul(optarg, NULL, 10);
+			if ((maxlpcnt > BUFMEMSZ - 1) || (maxlpcnt < 1)) {
 				print_usage(basename(argv[0]));
 				return 1;
 			}
@@ -296,7 +315,36 @@ int main(int argc, char **argv)
 			continue; /* wait for next frame */
 		}
 
-		/* TODO - add lowPrioCounter handling here */
+		/* lowPrioCounter handling */
+		for (i = 1, lowest_tid = TID_MAX, lowest_tid_idx = 0; i < BUFMEMSZ; i++) {
+			if (pdudata[i].len && (pdudata[i].prio & TID_MASK <= lowest_tid)) {
+				lowest_tid = pdudata[i].prio & TID_MASK;
+				lowest_tid_idx = i;
+			}
+		}
+
+		if (tid <= lowest_tid)
+			lpcnt = 0;
+		else
+			lpcnt++;
+
+		if (lpcnt >= maxlpcnt) {
+			if (!pdudata[lowest_tid_idx].len) {
+				printf("Empty content in pdudata table!\n");
+				return 1;
+			}
+
+			/* Testcase 11: exceed LowPrioCounter */
+			nn = 0xE7;
+			printf("TID %02X - state %02X: dropped high prio TID (lowPrioCnt %d reaches M %d)\n",
+			       lowest_tid, nn, lpcnt, maxlpcnt);
+			sendstate(can_if, lowest_tid, nn, ubuffs);
+
+			fcnt[lowest_tid_idx] = NO_FCNT_VALUE;
+			/* mark buffer as unused */
+			pdudata[lowest_tid_idx].len = 0;
+			ubuffs--;
+		}
 
 		/* common FCNT reception handling */
 		rxfcnt = ntohs(llc->fcnt); /* read from PCI with byte order */
@@ -355,11 +403,9 @@ int main(int argc, char **argv)
 
 			/* count buffer as used */
 			if (ubuffs >= maxbuffs) {
-				int highest_tid = 0;
-				int highest_tid_idx = 0;
 				/* we either grab a buffer with lower TID or ignore this FF */
-				for (i = 1; i < BUFMEMSZ; i++) {
-					if (pdudata[i].len && (pdudata[i].prio & TID_MASK > highest_tid)) {
+				for (i = 1, highest_tid = 0, highest_tid_idx = 0; i < BUFMEMSZ; i++) {
+					if (pdudata[i].len && (pdudata[i].prio & TID_MASK >= highest_tid)) {
 						highest_tid = pdudata[i].prio & TID_MASK;
 						highest_tid_idx = i;
 					}
