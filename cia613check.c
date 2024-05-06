@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 			fcnt[bufidx] = NO_FCNT_VALUE;
 
 			nn = 0x01;
-			printf("TID %02X - state %02X: stored PDU test data\n", nn, tid);
+			printf("TID %02X - state %02X: stored PDU test data\n", tid, nn);
 			sendstate(can_if, nn, tid);
 			continue; /* wait for next frame */
 		}
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
 		if (testdata[bufidx].len == 0) {
 			/* no test data available */
 			nn = 0x02;
-			printf("TID %02X - state %02X: no stored PDU test data available\n", nn, tid);
+			printf("TID %02X - state %02X: no stored PDU test data available\n", tid, nn);
 			sendstate(can_if, nn, tid);
 			continue; /* wait for next frame */
 		}
@@ -266,16 +266,16 @@ int main(int argc, char **argv)
 
 			if (pdudata[bufidx].len) {
 				nn = 0xE8;
-				printf("TID %02X - state %02X: unfragmented PDU within ongoing transfer\n", nn, tid);
+				printf("TID %02X - state %02X: unfragmented PDU within ongoing transfer\n", tid, nn);
 				sendstate(can_if, nn, tid);
 			}
 
 			if (!framecmp(&cf, &testdata[bufidx])) {
 				nn = 0x03;
-				printf("TID %02X - state %02X: received correct unfragmented PDU\n", nn, tid);
+				printf("TID %02X - state %02X: received correct unfragmented PDU\n", tid, nn);
 			} else {
 				nn = 0x04;
-				printf("TID %02X - state %02X: received incorrect unfragmented PDU\n", nn, tid);
+				printf("TID %02X - state %02X: received incorrect unfragmented PDU\n", tid, nn);
 			}
 			sendstate(can_if, nn, tid);
 			continue; /* wait for next frame */
@@ -283,7 +283,7 @@ int main(int argc, char **argv)
 
 		if ((llc->pci & PCI_VX_MASK) != CIA_613_3_VERSION) {
 			nn = 0x05;
-			printf("TID %02X - state %02X: dropped frame due to wrong CiA 613-3 version\n", nn, tid);
+			printf("TID %02X - state %02X: dropped frame due to wrong CiA 613-3 version\n", tid, nn);
 			sendstate(can_if, nn, tid);
 			continue; /* wait for next frame */
 		}
@@ -299,21 +299,21 @@ int main(int argc, char **argv)
 
 			if (pdudata[bufidx].len) {
 				nn = 0xE2;
-				printf("TID %02X - state %02X: FF: ongoing transfer not finished\n", nn, tid);
+				printf("TID %02X - state %02X: FF: ongoing transfer not finished\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				nn = 0x06;
-				printf("TID %02X - state %02X: FF: dropped LLC frame illegal fragment size\n", nn, tid);
+				printf("TID %02X - state %02X: FF: dropped LLC frame illegal fragment size\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
 
 			if (rxfragsz % FRAG_STEP_SIZE) {
 				nn = 0x07;
-				printf("TID %02X - state %02X: FF: dropped LLC frame illegal fragment step size\n", nn, tid);
+				printf("TID %02X - state %02X: FF: dropped LLC frame illegal fragment step size\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
@@ -343,7 +343,7 @@ int main(int argc, char **argv)
 			dataptr[bufidx] = pdudata[bufidx].len;
 
 			nn = 0x08;
-			printf("TID %02X - state %02X: FF: correctly received first fragment\n", nn, tid);
+			printf("TID %02X - state %02X: FF: correctly received first fragment\n", tid, nn);
 			sendstate(can_if, nn, tid);
 			continue; /* wait for next frame */
 		} /* FF */
@@ -370,14 +370,14 @@ int main(int argc, char **argv)
 
 			if (rxfragsz <  MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				nn = 0x09;
-				printf("TID %02X - state %02X: CF: dropped LLC frame illegal fragment size\n", nn, tid);
+				printf("TID %02X - state %02X: CF: dropped LLC frame illegal fragment size\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
 
 			if (rxfragsz % FRAG_STEP_SIZE) {
 				nn = 0x0A;
-				printf("TID %02X - state %02X: CF: dropped LLC frame illegal fragment step size\n", nn, tid);
+				printf("TID %02X - state %02X: CF: dropped LLC frame illegal fragment step size\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
@@ -385,7 +385,7 @@ int main(int argc, char **argv)
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
 				nn = 0xE9;
-				printf("TID %02X - state %02X: CF: dropped CF frame size overflow\n", nn, tid);
+				printf("TID %02X - state %02X: CF: dropped CF frame size overflow\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
@@ -424,7 +424,7 @@ int main(int argc, char **argv)
 
 			if (rxfragsz < LF_MIN_FRAG_SIZE || rxfragsz > MAX_FRAG_SIZE) {
 				nn = 0x0B;
-				printf("TID %02X - state %02X: LF: dropped LLC frame illegal fragment size\n", nn, tid);
+				printf("TID %02X - state %02X: LF: dropped LLC frame illegal fragment size\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
@@ -432,7 +432,7 @@ int main(int argc, char **argv)
 			/* make sure the data fits into the unfragmented frame */
 			if (dataptr[bufidx] + rxfragsz > CANXL_MAX_DLEN) {
 				nn = 0xE9;
-				printf("TID %02X - state %02X: LF: dropped LF frame size overflow\n", nn, tid);
+				printf("TID %02X - state %02X: LF: dropped LF frame size overflow\n", tid, nn);
 				sendstate(can_if, nn, tid);
 				continue;
 			}
@@ -447,10 +447,10 @@ int main(int argc, char **argv)
 
 			if (!framecmp(&pdudata[bufidx], &testdata[bufidx])) {
 				nn = 0x0C;
-				printf("TID %02X - state %02X: received correct PDU\n", nn, tid);
+				printf("TID %02X - state %02X: received correct PDU\n", tid, nn);
 			} else {
 				nn = 0x0D;
-				printf("TID %02X - state %02X: received incorrect PDU\n", nn, tid);
+				printf("TID %02X - state %02X: received incorrect PDU\n", tid, nn);
 			}
 			sendstate(can_if, nn, tid);
 
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 
 		/* invalid (reserved) FF/LF combination */
 		nn = 0xE1;
-		printf("TID %02X - state %02X: FF/LF: dropped LLC frame with reserved FF/LF bits set\n", nn, tid);
+		printf("TID %02X - state %02X: FF/LF: dropped LLC frame with reserved FF/LF bits set\n", tid, nn);
 		sendstate(can_if, nn, tid);
 		continue; /* wait for next frame */
 
