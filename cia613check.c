@@ -461,7 +461,7 @@ int main(int argc, char **argv)
 			if (fcnt[bufidx] != rxfcnt) {
 				nn = 0xE3;
 				printf("TID %02X - state %02X: CF: abort reception wrong FCNT! (%d/%d)\n",
-				       fcnt[bufidx], rxfcnt, nn, tid);
+				       tid, nn, fcnt[bufidx], rxfcnt);
 				sendstate(can_if, tid, nn, ubuffs, lpcnt);
 
 				/* Testcase 5: terminate potential ongoing transmission */
@@ -521,7 +521,7 @@ int main(int argc, char **argv)
 			if (fcnt[bufidx] != rxfcnt) {
 				nn = 0xE3;
 				printf("TID %02X - state %02X: LF: abort reception wrong FCNT! (%d/%d)\n",
-				       fcnt[bufidx], rxfcnt, nn, tid);
+				       tid, nn, fcnt[bufidx], rxfcnt);
 				sendstate(can_if, tid, nn, ubuffs, lpcnt);
 
 				/* mark buffer as unused */
