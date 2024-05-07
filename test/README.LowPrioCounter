@@ -1,0 +1,6 @@
+Disable the LowPrioCounter functionality for all testcases but TC 11!
+E.g. testcase 7 won't work with LowPrioCounter handling enabled.
+
+Disable the function by setting LowPrioCounter (default 2) higher than
+the buffer number (default 3), e.g.
+./cia613check vcanxl0 -v -l 10
