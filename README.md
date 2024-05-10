@@ -2,7 +2,7 @@
 PoC for CAN CiA 613-3 LLC Frame Fragmentation
 
 * implementation of CAN XL frame (de)fragmentation
-* no CiA 613-3 rx buffer management
+* no CiA 613-3 rx buffer management (in cia613join)
 * SEC handling for embedded add-on types (AOT)
 * add-on type (AOT) = 1 (001b)
 * protocol version = 1 (01b)
@@ -13,7 +13,9 @@ PoC for CAN CiA 613-3 LLC Frame Fragmentation
 * canxlrcv : display CAN XL traffic (optional: check test data)
 * cia613frag : fragment CAN XL frames according to CAN CiA 613-3
 * cia613join : join CAN XL frames according to CAN CiA 613-3
+* cia613check : CAN CiA 613-3 test application for CiA plugfest 2024-05-16
 * create_canxl_vcans.sh : script to create virtual CAN XL interfaces
+* test : testcases for hand crafted log files for CiA plugfest 2024-05-16
 
 ### PoC test setup and data flow
 
